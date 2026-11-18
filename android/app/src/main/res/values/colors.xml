@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Top of the ember gradient: the launch window matches the first frame. -->
+    <color name="launch_background">#1A0602</color>
+</resources>
