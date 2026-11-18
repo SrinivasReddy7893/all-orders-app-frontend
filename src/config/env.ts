@@ -10,5 +10,10 @@ const DEV_API_URL = Platform.select({
 });
 
 export const config = {
-  apiBaseUrl: __DEV__ ? DEV_API_URL : 'https://api.example.com', // TODO: set production URL
+  apiBaseUrl: `${__DEV__ ? DEV_API_URL : 'https://api.example.com'}/api/v1`, // TODO: production URL
+  /** TODO: replace with the published policy pages before release. */
+  legalUrls: {
+    terms: 'https://example.com/terms',
+    privacy: 'https://example.com/privacy',
+  },
 } as const;
