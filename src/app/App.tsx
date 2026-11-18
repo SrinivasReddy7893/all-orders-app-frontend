@@ -1,28 +1,20 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from 'react-native-safe-area-context';
 
-import { APP_NAME } from '@/constants/app';
-import { colors, typography } from '@/theme';
+import { RootNavigator } from '@/navigation/RootNavigator';
+import { SessionProvider } from '@/store/session';
 
 function App() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome to {APP_NAME} App</Text>
-    </View>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <SessionProvider>
+        <RootNavigator />
+      </SessionProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
-  title: {
-    ...typography.title,
-    color: colors.textPrimary,
-  },
-});
 
 export default App;
