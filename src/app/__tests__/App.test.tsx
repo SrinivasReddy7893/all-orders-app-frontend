@@ -1,13 +1,14 @@
-/**
- * @format
- */
-
 import React from 'react';
+import { Text } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
+
 import App from '../App';
 
-test('renders correctly', async () => {
+test('renders the welcome message', async () => {
+  let tree!: ReactTestRenderer.ReactTestRenderer;
   await ReactTestRenderer.act(() => {
-    ReactTestRenderer.create(<App />);
+    tree = ReactTestRenderer.create(<App />);
   });
+  const text = tree.root.findByType(Text).props.children;
+  expect([text].flat().join('')).toBe('Welcome to All Orders App');
 });
