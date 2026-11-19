@@ -3,34 +3,49 @@
  * orange (kept deep enough at the bottom for white text to pass contrast).
  */
 export const colors = {
-  ink: '#121212',
+  ink: '#1C1410',
   onInk: '#FFFFFF',
 
   onEmber: '#FFFFFF',
-  onEmberMuted: 'rgba(255, 255, 255, 0.88)',
-  onEmberSubtle: 'rgba(255, 255, 255, 0.72)',
+  onEmberMuted: 'rgba(255, 255, 255, 0.92)',
+  onEmberSubtle: 'rgba(255, 255, 255, 0.84)',
   glass: 'rgba(255, 255, 255, 0.14)',
   glassBorder: 'rgba(255, 255, 255, 0.24)',
   live: '#FF8A4C',
 
   // White product-UI surfaces floating on the ember gradient
   surface: '#FFFFFF',
-  textPrimary: '#121212',
-  textSecondary: '#6B6B70',
-  track: '#F1E9E5',
+  textPrimary: '#1C1410',
+  textSecondary: '#6B5B4F',
+  /** Inactive tabs and filters: darker than secondary text, softer than ink. */
+  inkSoft: '#4F4036',
+  track: '#F5ECE3',
   ember: '#E2501A',
   /** Ember for text on white (4.5:1+); `ember` is for fills. */
-  emberText: '#C2410C',
+  emberText: '#B93C0A',
   danger: '#FFD7C9',
 
   // Product canvas under the ember header (Home and beyond)
-  canvas: '#FAF6F3',
-  hairline: '#EDE3DD',
-  success: '#1F7A4D',
+  canvas: '#FFF7ED',
+  hairline: '#F1E4D6',
+  /** Boundary of a control (field, chip, button): visible, still soft. */
+  border: '#C9B4A1',
+  success: '#17693F',
   successTint: '#E4F3EA',
-  emberTint: '#FDEDE4',
+  emberTint: '#FFEDD5',
+  /** In transit: amber, the warm step between waiting and arriving. */
+  amberText: '#92400E',
+  amberTint: '#FEF3C7',
+  amberFill: '#B45309',
+  /** Waiting: warm stone, so "confirmed" stays quiet and on-palette. */
+  stone: '#6B5B4F',
+  stoneTint: '#F5EFE8',
+  /** Ended: cancelled, returned, refunded. */
+  dangerText: '#B91C1C',
+  dangerTint: '#FEE2E2',
+  dangerFill: '#DC2626',
   /** Warm hairline for order cards. */
-  cardBorder: '#F6DFD1',
+  cardBorder: '#F8E3D3',
 } as const;
 
 /** CSS gradients for the native `backgroundImage` style (RN 0.76+). */

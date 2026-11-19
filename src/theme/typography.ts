@@ -25,6 +25,13 @@ export const font = (weight: Weight): TextStyle =>
     default: { fontFamily: ANDROID_FAMILY[weight] },
   });
 
+/**
+ * Poppins SemiBold: the display voice for titles, headers and big amounts,
+ * paired with Inter for everything else. One weight, so never combine it
+ * with `fontWeight`.
+ */
+export const display: TextStyle = { fontFamily: 'Poppins-SemiBold' };
+
 export const typography = {
   display: {
     ...font('medium'),
