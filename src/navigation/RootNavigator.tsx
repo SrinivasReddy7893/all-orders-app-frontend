@@ -12,9 +12,12 @@ import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-/** Signed-out users start at Welcome; signed-in users skip it entirely. */
+/**
+ * Signed-out users see Welcome and sign-in; signed-in users only Home.
+ * Signing in or out swaps the stack, so no screen resets it by hand.
+ */
 export function RootNavigator() {
-  const { session } = useSession();
+  const { status } = useSession();
   // Platform-default transitions; a crossfade when reduce motion is on.
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
@@ -25,23 +28,31 @@ export function RootNavigator() {
     );
     return () => sub.remove();
   }, []);
+  // Keep the launch background up while the stored session is restored.
+  if (status === 'restoring') return null;
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName={session ? 'Home' : 'Welcome'}
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#1A0602' },
           animation: reduceMotion ? 'fade' : 'default',
         }}
       >
-        <Stack.Screen name="Welcome">
-          {({ navigation }) => (
-            <WelcomeScreen onGetStarted={() => navigation.navigate('SignIn')} />
-          )}
-        </Stack.Screen>
-        <Stack.Screen name="SignIn" component={SignInScreen} />
-        <Stack.Screen name="Home" component={HomeScreen} />
+        {status === 'signedIn' ? (
+          <Stack.Screen name="Home" component={HomeScreen} />
+        ) : (
+          <>
+            <Stack.Screen name="Welcome">
+              {({ navigation }) => (
+                <WelcomeScreen
+                  onGetStarted={() => navigation.navigate('SignIn')}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="SignIn" component={SignInScreen} />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );

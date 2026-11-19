@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useShake } from '@/hooks/useShake';
@@ -33,9 +33,14 @@ export const CodeInput = forwardRef<
             !!value[i] && styles.boxFilled,
             i === value.length && !busy && styles.boxActive,
             error && styles.boxError,
+            busy && styles.boxBusy,
           ]}
         >
-          <Text style={styles.digit}>{value[i] ?? ''}</Text>
+          {value[i] ? (
+            <Text style={styles.digit}>{value[i]}</Text>
+          ) : i === value.length && !busy ? (
+            <Caret />
+          ) : null}
         </View>
       ))}
       <TextInput
@@ -53,6 +58,31 @@ export const CodeInput = forwardRef<
     </Animated.View>
   );
 });
+
+/** A soft blinking caret, so the active box reads as "type here". */
+function Caret() {
+  const blink = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(blink, {
+          toValue: 0,
+          duration: 450,
+          delay: 350,
+          useNativeDriver: true,
+        }),
+        Animated.timing(blink, {
+          toValue: 1,
+          duration: 450,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [blink]);
+  return <Animated.View style={[styles.caret, { opacity: blink }]} />;
+}
 
 const styles = StyleSheet.create({
   boxes: {
@@ -74,6 +104,8 @@ const styles = StyleSheet.create({
   boxFilled: { backgroundColor: '#FFF4EE', borderColor: '#FFF4EE' },
   boxActive: { borderColor: colors.ink },
   boxError: { borderColor: colors.emberText },
+  boxBusy: { opacity: 0.6 },
+  caret: { width: 2, height: 26, borderRadius: 1, backgroundColor: colors.ink },
   digit: { ...typography.title, fontSize: 24, color: colors.textPrimary },
   overlay: {
     position: 'absolute',

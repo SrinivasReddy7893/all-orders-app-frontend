@@ -26,3 +26,22 @@ export const getGmailConnectUrl = async (token: string) =>
       token,
     })
   ).data.url;
+
+export type Tokens = { accessToken: string; refreshToken: string };
+
+/** Trades a refresh token for a new pair; the old one stops working. */
+export const refreshTokens = async (refreshToken: string) =>
+  (
+    await apiRequest<{ data: Tokens }>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    })
+  ).data;
+
+/** Revokes this device's refresh token on the server. */
+export const logout = (accessToken: string, refreshToken: string) =>
+  apiRequest<unknown>('/auth/logout', {
+    method: 'POST',
+    token: accessToken,
+    body: JSON.stringify({ refreshToken }),
+  });

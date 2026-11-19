@@ -1,6 +1,14 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { CodeInput } from '@/components/common/CodeInput';
 import { FormHeader, formText } from '@/components/common/FormHeader';
@@ -19,6 +27,7 @@ import {
   formatPhone,
   groupDigits,
   isValidIndianMobile,
+  phoneHint,
   toE164India,
 } from '@/utils/phone';
 
@@ -32,7 +41,7 @@ const RESEND_SECONDS = 60; // matches the backend's resend cooldown
  * below. The keyboard never closes and the code submits itself.
  */
 export function SignInScreen({ navigation }: Props) {
-  const { setSession } = useSession();
+  const { signIn } = useSession();
   const codeRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [digits, setDigits] = useState('');
   const [phone, setPhone] = useState<string>(); // set once a code was sent
@@ -72,8 +81,7 @@ export function SignInScreen({ navigation }: Props) {
     setLoading(true);
     setError(undefined);
     try {
-      setSession(await verifyOtp(phone, value));
-      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      await signIn(await verifyOtp(phone, value));
     } catch (e) {
       setError(describeError(e));
       shake.shake();
@@ -111,20 +119,29 @@ export function SignInScreen({ navigation }: Props) {
         )
       }
     >
-      <FormHeader title={phone ? 'Enter the code' : "What's your number?"}>
-        <Text style={formText.body}>
-          {phone
-            ? `Sent by SMS to ${formatPhone(phone)}.`
-            : "We'll text you a code to sign in or create your account."}
-        </Text>
+      <FormHeader
+        title={phone ? 'Enter the 6-digit code' : "What's your number?"}
+      >
         {phone ? (
-          <TextLink
-            align="start"
-            label="Change number"
-            onPress={changeNumber}
-            style={styles.inlineLink}
-          />
-        ) : null}
+          <View style={styles.sentRow}>
+            <Text style={formText.body}>
+              Sent to <Text style={styles.sentPhone}>{formatPhone(phone)}</Text>
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit phone number"
+              onPress={changeNumber}
+              hitSlop={10}
+              style={({ pressed }) => [styles.edit, pressed && styles.pressed]}
+            >
+              <Text style={styles.editText}>Edit</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={formText.body}>
+            We'll text you a code to sign in or create your account.
+          </Text>
+        )}
       </FormHeader>
 
       {phone ? (
@@ -173,6 +190,12 @@ export function SignInScreen({ navigation }: Props) {
         </View>
       )}
 
+      {!phone && !error && phoneHint(digits) ? (
+        <Text style={styles.hint} accessibilityLiveRegion="polite">
+          {phoneHint(digits)}
+        </Text>
+      ) : null}
+
       {error ? (
         <Text
           style={formText.error}
@@ -185,9 +208,14 @@ export function SignInScreen({ navigation }: Props) {
 
       {phone ? (
         <View style={styles.resend}>
-          {wait > 0 ? (
-            <Text style={formText.body}>
-              Resend code in 0:{String(wait).padStart(2, '0')}
+          {loading ? (
+            <View style={styles.checking}>
+              <ActivityIndicator size="small" color={colors.onEmberMuted} />
+              <Text style={styles.resendText}>Checking code…</Text>
+            </View>
+          ) : wait > 0 ? (
+            <Text style={styles.resendText}>
+              Didn't get it? Resend in 0:{String(wait).padStart(2, '0')}
             </Text>
           ) : (
             <TextLink
@@ -252,5 +280,37 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingVertical: 0,
   },
-  resend: { marginTop: spacing.lg, alignItems: 'flex-start' },
+  hint: {
+    ...typography.caption,
+    fontSize: 14,
+    color: colors.onEmberSubtle,
+    marginTop: spacing.sm,
+    fontVariant: ['tabular-nums'],
+  },
+  resend: { marginTop: spacing.lg, minHeight: 24, justifyContent: 'center' },
+  resendText: {
+    ...typography.body,
+    fontSize: 15,
+    color: colors.onEmberSubtle,
+    fontVariant: ['tabular-nums'],
+  },
+  checking: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  sentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  sentPhone: { ...typography.label, fontSize: 16, color: colors.onEmber },
+  edit: {
+    paddingHorizontal: spacing.sm,
+    height: 28,
+    borderRadius: radius.pill,
+    backgroundColor: colors.glass,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    justifyContent: 'center',
+  },
+  editText: { ...typography.label, fontSize: 13, color: colors.onEmber },
+  pressed: { opacity: 0.7 },
 });
