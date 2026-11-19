@@ -10,6 +10,7 @@ import {
 import { formText } from '@/components/common/FormHeader';
 import { TextLink } from '@/components/common/TextLink';
 import { ConnectGmail } from '@/features/gmail/ConnectGmail';
+import { OrderSheetProvider } from '@/features/orders/OrderSheetContext';
 import { MainTabs } from '@/navigation/MainTabs';
 import { getGmailConnectUrl } from '@/services/api/auth';
 import { describeError } from '@/services/api/errors';
@@ -73,7 +74,11 @@ function Gate() {
     );
   }
 
-  return <MainTabs />;
+  return (
+    <OrderSheetProvider>
+      <MainTabs />
+    </OrderSheetProvider>
+  );
 }
 
 const styles = StyleSheet.create({

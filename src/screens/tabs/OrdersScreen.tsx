@@ -1,183 +1,237 @@
-import {
-  CalendarDays,
-  CircleX,
-  PackageCheck,
-  ReceiptText,
-  SearchX,
-  Truck,
-  X,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { useIsFocused } from '@react-navigation/native';
+import { CalendarDays, SearchX, X } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { EmberScreen } from '@/components/common/EmberScreen';
-import { GlassButton } from '@/components/common/GlassButton';
 import { CalendarSheet } from '@/features/orders/components/CalendarSheet';
+import { OrderLine } from '@/features/orders/components/OrderLine';
+import { StatusTabs } from '@/features/orders/components/StatusTabs';
+import { EmptyState } from '@/features/orders/components/OrderSections';
 import {
-  EmptyState,
-  OrderList,
-  SectionTitle,
-  sectionStyles,
-} from '@/features/orders/components/OrderSections';
-import { GlassTile } from '@/features/orders/components/SpendBreakdown';
-import {
+  arrivalGroup,
+  bySoonest,
   dateFilterLabel,
   isActive,
   matchesDate,
   matchesQuery,
-  monthKey,
+  dayGroup,
   orderTitle,
   type DateFilter,
 } from '@/features/orders/format';
+import { useOpenOrder } from '@/features/orders/OrderSheetContext';
 import { SearchBar } from '@/features/search/SearchBar';
+import { useSwapIn } from '@/hooks/useSwapIn';
 import type { Order } from '@/services/api/orders';
 import { useOrders } from '@/store/orders';
-import { colors, radius, spacing, typography } from '@/theme';
+import { colors, display, radius, spacing, typography } from '@/theme';
 
-type Status = {
-  key: string;
-  label: string;
-  icon: LucideIcon;
-  test: (o: Order) => boolean;
-};
+type Filter = { key: string; label: string; test: (o: Order) => boolean };
 
-const STATUS: Status[] = [
-  { key: 'ALL', label: 'All orders', icon: ReceiptText, test: () => true },
-  { key: 'ACTIVE', label: 'On the way', icon: Truck, test: isActive },
-  {
-    key: 'DELIVERED',
-    label: 'Delivered',
-    icon: PackageCheck,
-    test: o => o.isDelivered,
-  },
+const FILTERS: Filter[] = [
+  { key: 'ALL', label: 'All', test: () => true },
+  { key: 'ACTIVE', label: 'On the way', test: isActive },
+  { key: 'DELIVERED', label: 'Delivered', test: o => o.isDelivered },
   {
     key: 'CLOSED',
     label: 'Cancelled',
-    icon: CircleX,
     test: o =>
       o.isCancelled || o.status === 'RETURNED' || o.status === 'REFUNDED',
   },
 ];
 
 /**
- * Every order, newest month first. The ember header counts orders by
- * status (tap a tile to filter); search and the calendar narrow further.
+ * Every order, newest month first, on a plain white page: a title, one
+ * search field, one row of filters, then the list. Nothing else competes.
  */
 export function OrdersScreen() {
+  const insets = useSafeAreaInsets();
+  const focused = useIsFocused();
   const { orders, refreshing, refresh } = useOrders();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('ALL');
   const [date, setDate] = useState<DateFilter | null>(null);
   const [calendar, setCalendar] = useState(false);
+  const [raised, setRaised] = useState(false);
+  const openOrder = useOpenOrder();
 
   const inDate = orders.filter(o => matchesDate(o, date));
-  const test = STATUS.find(s => s.key === status)?.test ?? (() => true);
+  const test = FILTERS.find(f => f.key === status)?.test ?? (() => true);
   const visible = inDate.filter(o => test(o) && matchesQuery(o, query));
 
+  // Orders still on their way come first, soonest arrival first (today,
+  // tomorrow, then by date). Everything settled follows, newest order first.
   const groups = useMemo(() => {
-    const map = new Map<string, Order[]>();
-    for (const o of visible) {
-      const key = monthKey(o.orderedAt);
-      map.set(key, [...(map.get(key) ?? []), o]);
-    }
-    return [...map.entries()];
-  }, [visible]);
+    const incoming =
+      status === 'ALL' || status === 'ACTIVE'
+        ? visible.filter(isActive).sort(bySoonest)
+        : [];
+    const rest = visible.filter(o => !incoming.includes(o));
+
+    type Group = { key: string; label: string; list: Order[]; soon?: boolean };
+    const build = (
+      list: Order[],
+      pick: (o: Order) => { key: string; label: string },
+      soon: boolean,
+    ) => {
+      const map = new Map<string, Group>();
+      for (const o of list) {
+        const { key, label } = pick(o);
+        const group = map.get(`${soon}-${key}`) ?? {
+          key: `${soon}-${key}`,
+          label,
+          list: [],
+          soon,
+        };
+        group.list.push(o);
+        map.set(group.key, group);
+      }
+      return [...map.values()];
+    };
+
+    return [
+      ...build(incoming, o => arrivalGroup(o), true).sort((a, b) =>
+        a.key.localeCompare(b.key),
+      ),
+      ...build(rest, o => dayGroup(o.orderedAt), false),
+    ];
+  }, [visible, status]);
 
   const examples = useMemo(
     () => orders.map(o => o.orderId ?? orderTitle(o)).slice(0, 5),
     [orders],
   );
 
+  const swap = useSwapIn(`${status}|${date ? dateFilterLabel(date) : ''}`);
+
   return (
-    <EmberScreen
-      title="Orders"
-      refreshing={refreshing}
-      onRefresh={refresh}
-      accessory={
-        <GlassButton
-          label="Filter by date"
-          onPress={() => setCalendar(true)}
-          active={!!date}
-        >
-          <CalendarDays
-            size={18}
-            color={date ? colors.emberText : colors.onEmber}
-            strokeWidth={2.2}
-          />
-        </GlassButton>
-      }
-      renderSearch={variant => (
+    <View style={styles.screen}>
+      {focused ? <StatusBar barStyle="dark-content" /> : null}
+
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top + spacing.sm },
+          raised && styles.headerRaised,
+        ]}
+      >
+        <View style={styles.titleRow}>
+          <Text style={styles.title} accessibilityRole="header">
+            Orders
+          </Text>
+          <Pressable
+            onPress={() => setCalendar(true)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Filter by date"
+            style={({ pressed }) => [
+              styles.iconButton,
+              !!date && styles.iconButtonOn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <CalendarDays
+              size={20}
+              color={date ? colors.emberText : colors.textPrimary}
+              strokeWidth={2}
+            />
+          </Pressable>
+        </View>
+
         <SearchBar
           value={query}
           onChange={setQuery}
           examples={examples}
-          variant={variant}
+          variant="filled"
         />
-      )}
-      hero={
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tilesScroll}
-          contentContainerStyle={styles.tiles}
-        >
-          {STATUS.map(s => {
-            const Icon = s.icon;
-            const on = s.key === status;
-            return (
-              <GlassTile
-                key={s.key}
-                selected={on}
-                icon={
-                  <View style={[styles.icon, on && styles.iconOn]}>
-                    <Icon
-                      size={14}
-                      color={on ? colors.onEmber : colors.ink}
-                      strokeWidth={2.2}
-                    />
-                  </View>
-                }
-                value={String(inDate.filter(s.test).length)}
-                label={s.label}
-                onPress={() => setStatus(s.key)}
-              />
-            );
-          })}
-        </ScrollView>
-      }
-    >
-      {date ? (
-        <Pressable
-          onPress={() => setDate(null)}
-          accessibilityRole="button"
-          accessibilityLabel={`Remove date filter ${dateFilterLabel(date)}`}
-          style={styles.dateChip}
-        >
-          <CalendarDays size={14} color={colors.emberText} strokeWidth={2.2} />
-          <Text style={styles.dateText}>{dateFilterLabel(date)}</Text>
-          <X size={14} color={colors.emberText} strokeWidth={2.4} />
-        </Pressable>
-      ) : null}
 
-      {visible.length === 0 ? (
-        <EmptyState
-          icon={SearchX}
-          title="No matching orders"
-          body={
-            date
-              ? `No orders on ${dateFilterLabel(date)}. Try another date.`
-              : 'Try a product, shop or order ID, or another filter.'
-          }
-        />
-      ) : null}
-
-      {groups.map(([month, list]) => (
-        <View key={month} style={sectionStyles.section}>
-          <SectionTitle title={month} count={list.length} />
-          <OrderList orders={list} />
+        <View style={styles.tabs}>
+          <StatusTabs
+            value={status}
+            onChange={setStatus}
+            options={FILTERS.map(f => ({
+              key: f.key,
+              label: f.label,
+              count: inDate.filter(f.test).length,
+            }))}
+          />
         </View>
-      ))}
+      </View>
+
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        scrollEventThrottle={32}
+        onScroll={e => {
+          const next = e.nativeEvent.contentOffset.y > 2;
+          setRaised(prev => (prev === next ? prev : next));
+        }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refresh}
+            colors={[colors.ember]}
+          />
+        }
+      >
+        <Animated.View style={swap}>
+          {date ? (
+            <Pressable
+              onPress={() => setDate(null)}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove date filter ${dateFilterLabel(date)}`}
+              style={styles.dateChip}
+            >
+              <CalendarDays
+                size={14}
+                color={colors.emberText}
+                strokeWidth={2.2}
+              />
+              <Text style={styles.dateText}>{dateFilterLabel(date)}</Text>
+              <X size={14} color={colors.emberText} strokeWidth={2.4} />
+            </Pressable>
+          ) : null}
+
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={SearchX}
+              title="No matching orders"
+              body={
+                date
+                  ? `No orders on ${dateFilterLabel(date)}. Try another date.`
+                  : 'Try a product, shop or order ID, or another filter.'
+              }
+            />
+          ) : null}
+
+          {groups.map(({ key, label, list, soon }) => (
+            <View key={key} style={styles.group}>
+              <Text
+                style={[
+                  styles.day,
+                  soon && label === 'Arriving today' && styles.dayNow,
+                ]}
+              >
+                {label}
+              </Text>
+              {list.map(o => (
+                <OrderLine key={o.id} order={o} onPress={openOrder} />
+              ))}
+            </View>
+          ))}
+        </Animated.View>
+      </ScrollView>
 
       <CalendarSheet
         visible={calendar}
@@ -186,28 +240,70 @@ export function OrdersScreen() {
         onChange={setDate}
         onClose={() => setCalendar(false)}
       />
-    </EmberScreen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tilesScroll: { marginHorizontal: -spacing.lg },
-  tiles: { paddingHorizontal: spacing.lg, gap: spacing.xs },
-  icon: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+  screen: { flex: 1, backgroundColor: colors.canvas },
+  header: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 0,
+    gap: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.hairline,
+  },
+  headerRaised: { boxShadow: '0px 6px 16px rgba(60, 20, 5, 0.07)', zIndex: 1 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+  },
+  title: {
+    ...display,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
+    color: colors.textPrimary,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFD2A8',
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  iconOn: { backgroundColor: colors.emberText },
+  iconButtonOn: {
+    backgroundColor: colors.emberTint,
+    borderColor: colors.emberTint,
+  },
+  tabs: { marginHorizontal: -spacing.md },
+  pressed: { opacity: 0.6 },
+  list: { flex: 1 },
+  listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl },
+  group: { gap: spacing.xs + 2 },
+  dayNow: { color: colors.emberText },
+  day: {
+    ...display,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.1,
+    color: colors.textPrimary,
+    marginTop: spacing.md,
+    marginBottom: 2,
+  },
   dateChip: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 6,
     height: 32,
+    marginTop: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.emberTint,

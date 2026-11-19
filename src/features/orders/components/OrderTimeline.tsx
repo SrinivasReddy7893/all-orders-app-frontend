@@ -32,6 +32,8 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
   const step = trackStep(status);
   const nowLabel =
     status === 'OUT_FOR_DELIVERY' ? 'Out for delivery' : STEPS[step].label;
+  // Short on screen so it survives large system text; the full phrase is read aloud.
+  const nowShown = status === 'OUT_FOR_DELIVERY' ? 'On the way' : nowLabel;
   const last = STEPS.length - 1;
 
   return (
@@ -86,7 +88,7 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
               style={[styles.label, now && styles.labelNow]}
               numberOfLines={1}
             >
-              {now ? nowLabel : label}
+              {now ? nowShown : label}
             </Text>
           </View>
         );

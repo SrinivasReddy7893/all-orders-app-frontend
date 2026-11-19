@@ -3,7 +3,15 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import type { Order } from '@/services/api/orders';
-import { colors, font, gradients, radius, spacing, typography } from '@/theme';
+import {
+  colors,
+  display,
+  font,
+  gradients,
+  radius,
+  spacing,
+  typography,
+} from '@/theme';
 
 import { OrderRow } from './OrderCards';
 
@@ -92,9 +100,9 @@ const styles = StyleSheet.create({
   },
   // Section labels: bold capitals, tracked out so caps don't crowd.
   sectionTitle: {
-    ...font('bold'),
-    fontSize: 21,
-    lineHeight: 26,
+    ...display,
+    fontSize: 17,
+    lineHeight: 24,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     color: colors.textPrimary,
@@ -140,7 +148,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  emptyTitle: { ...typography.title, color: colors.textPrimary },
+  emptyTitle: {
+    ...display,
+    fontSize: 19,
+    lineHeight: 26,
+    color: colors.textPrimary,
+  },
   emptyBody: {
     ...typography.body,
     color: colors.textSecondary,

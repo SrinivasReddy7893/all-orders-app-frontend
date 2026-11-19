@@ -1,7 +1,6 @@
 import { ArrowUpRight } from 'lucide-react-native';
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import {
-  AccessibilityInfo,
   Animated,
   Pressable,
   ScrollView,
@@ -10,12 +9,14 @@ import {
   View,
 } from 'react-native';
 
+import { useCountUp } from '@/hooks/useCountUp';
 import { usePressScale } from '@/hooks/usePressScale';
 import type { MonthSummary } from '@/services/api/orders';
-import { colors, easeOut, font, radius, spacing, typography } from '@/theme';
+import { colors, display, font, radius, spacing, typography } from '@/theme';
 
 import { categoryStyle } from '../categories';
 import { formatMoney, monthName, plural } from '../format';
+import { SpendBar } from './SpendBar';
 
 type Props = { summary: MonthSummary; onSeeAll?: () => void };
 
@@ -27,23 +28,6 @@ type Props = { summary: MonthSummary; onSeeAll?: () => void };
 export function SpendBreakdown({ summary, onSeeAll }: Props) {
   const total = summary.totalSpent;
   const rows = summary.categories.filter(c => c.spent > 0);
-  const fill = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    let anim: Animated.CompositeAnimation | undefined;
-    AccessibilityInfo.isReduceMotionEnabled().then(reduce => {
-      if (reduce) return fill.setValue(1);
-      anim = Animated.timing(fill, {
-        toValue: 1,
-        duration: 700,
-        delay: 150,
-        easing: easeOut,
-        useNativeDriver: true,
-      });
-      anim.start();
-    });
-    return () => anim?.stop();
-  }, [fill]);
 
   return (
     <View>
@@ -57,24 +41,15 @@ export function SpendBreakdown({ summary, onSeeAll }: Props) {
 
       {rows.length ? (
         <>
-          <Animated.View
-            style={[styles.bar, { transform: [{ scaleX: fill }] }]}
-            importantForAccessibility="no-hide-descendants"
-            accessibilityElementsHidden
-          >
-            {rows.map(r => (
-              <View
-                key={r.category}
-                style={[
-                  styles.segment,
-                  {
-                    flex: Math.max(r.spent, total * 0.02),
-                    backgroundColor: categoryStyle(r.category).bar,
-                  },
-                ]}
-              />
-            ))}
-          </Animated.View>
+          <SpendBar
+            animateKey={summary.month}
+            total={total}
+            segments={rows.map(r => ({
+              key: r.category,
+              spent: r.spent,
+              color: categoryStyle(r.category).bar,
+            }))}
+          />
 
           <ScrollView
             horizontal
@@ -119,7 +94,9 @@ export function SpendTotal({
   /** Replaces the label (e.g. a month stepper). */
   left?: React.ReactNode;
 }) {
-  const money = formatMoney(amount) ?? '₹0';
+  const counted = useCountUp(amount);
+  const money = formatMoney(counted) ?? '₹0';
+  const exact = formatMoney(amount) ?? '₹0';
   const dot = money.indexOf('.');
   const whole = dot > 0 ? money.slice(0, dot) : money;
   const paise = dot > 0 ? money.slice(dot) : '';
@@ -136,7 +113,7 @@ export function SpendTotal({
       <Text
         style={styles.total}
         accessibilityRole="header"
-        accessibilityLabel={`${label}: ${money}`}
+        accessibilityLabel={`${label}: ${exact}`}
         adjustsFontSizeToFit
         numberOfLines={1}
       >
@@ -275,12 +252,11 @@ const styles = StyleSheet.create({
   },
   countText: { ...typography.label, fontSize: 12, color: colors.onEmber },
   total: {
-    ...font('bold'),
-    fontSize: 46,
-    lineHeight: 54,
-    letterSpacing: -1.6,
+    ...display,
+    fontSize: 42,
+    lineHeight: 52,
+    letterSpacing: -1,
     color: colors.onEmber,
-    fontVariant: ['tabular-nums'],
     marginTop: spacing.xxs,
   },
   paise: {
@@ -289,14 +265,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: colors.onEmberSubtle,
   },
-  bar: {
-    flexDirection: 'row',
-    gap: 3,
-    height: 10,
-    marginTop: spacing.md,
-    transformOrigin: 'left',
-  },
-  segment: { borderRadius: 5 },
   // Tiles bleed to the screen edge so the row reads as swipeable.
   tilesScroll: { marginHorizontal: -spacing.lg, marginTop: spacing.md },
   tiles: { paddingHorizontal: spacing.lg, gap: spacing.xs },

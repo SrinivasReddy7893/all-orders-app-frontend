@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, easeOut, font, radius, spacing } from '@/theme';
+import { colors, display, easeOut, radius, spacing } from '@/theme';
 
 export const EMBER_TOP = '#1A0602';
 const HEADER = `linear-gradient(180deg, ${EMBER_TOP} 0%, #4A1004 55%, #6E1A06 100%)`;
@@ -192,10 +192,10 @@ const styles = StyleSheet.create({
     minHeight: 48 + spacing.sm,
   },
   title: {
-    ...font('bold'),
+    ...display,
     fontSize: 26,
     lineHeight: 32,
-    letterSpacing: -0.6,
+    letterSpacing: -0.3,
     color: colors.onEmber,
   },
   titleDark: { color: colors.textPrimary },

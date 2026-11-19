@@ -10,6 +10,7 @@ import {
   SectionTitle,
   sectionStyles,
 } from '@/features/orders/components/OrderSections';
+import { SpendBar } from '@/features/orders/components/SpendBar';
 import { SpendTotal } from '@/features/orders/components/SpendBreakdown';
 import { formatMoney, MONTHS_LONG, plural } from '@/features/orders/format';
 import { describeError } from '@/services/api/errors';
@@ -95,20 +96,15 @@ export function SpendsScreen() {
             }
           />
           {priced.length ? (
-            <View style={styles.bar}>
-              {priced.map(r => (
-                <View
-                  key={r.category}
-                  style={[
-                    styles.segment,
-                    {
-                      flex: Math.max(r.spent, total * 0.02),
-                      backgroundColor: categoryStyle(r.category).bar,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
+            <SpendBar
+              animateKey={key(cursor.year, cursor.month)}
+              total={total}
+              segments={priced.map(r => ({
+                key: r.category,
+                spent: r.spent,
+                color: categoryStyle(r.category).bar,
+              }))}
+            />
           ) : null}
           <Text style={styles.note}>
             {summary?.unpricedOrders
@@ -195,8 +191,6 @@ export function SpendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', gap: 3, height: 10, marginTop: spacing.md },
-  segment: { borderRadius: 5 },
   note: {
     ...typography.caption,
     color: colors.onEmberSubtle,

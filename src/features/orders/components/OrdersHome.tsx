@@ -18,7 +18,7 @@ import { SearchBar } from '@/features/search/SearchBar';
 import type { MainTabParamList } from '@/navigation/types';
 import { useEntrance } from '@/hooks/useEntrance';
 import { useOrders } from '@/store/orders';
-import { colors, easeOut, radius, spacing, typography } from '@/theme';
+import { colors, display, easeOut, radius, spacing, typography } from '@/theme';
 
 import { bySoonest, isActive, matchesQuery, orderTitle } from '../format';
 import type { FilterOption } from './CategoryFilter';
@@ -304,7 +304,12 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  brandName: { ...typography.label, color: colors.onEmber },
+  brandName: {
+    ...display,
+    fontSize: 18,
+    lineHeight: 24,
+    color: colors.onEmber,
+  },
   searchInner: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,

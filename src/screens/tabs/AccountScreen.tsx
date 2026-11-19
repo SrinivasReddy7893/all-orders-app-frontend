@@ -136,7 +136,7 @@ function Row({
       </View>
       <View style={styles.body}>
         <Text style={styles.label}>{label}</Text>
-        <Text style={styles.value} numberOfLines={1}>
+        <Text style={styles.value} numberOfLines={1} ellipsizeMode="middle">
           {value}
         </Text>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconDanger: { backgroundColor: '#FDE8E5' },
+  iconDanger: { backgroundColor: colors.dangerTint },
   body: { flex: 1, gap: 1 },
   label: { ...typography.caption, color: colors.textSecondary },
   value: { ...typography.label, color: colors.textPrimary },
