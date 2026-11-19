@@ -8,6 +8,8 @@ import React, {
 } from 'react';
 import { AppState, Linking } from 'react-native';
 
+import { useAppActive } from '@/hooks/useAppActive';
+
 import { describeError } from '@/services/api/errors';
 import {
   getMe,
@@ -77,11 +79,13 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
   }, [load]);
 
   const syncing = !!me?.gmail && (me.gmail.isSyncing || !me.gmail.lastSyncedAt);
+  const active = useAppActive();
+  // Poll only while syncing and on screen; a backgrounded app stays quiet.
   useEffect(() => {
-    if (!syncing) return;
+    if (!syncing || !active) return;
     const t = setInterval(load, 4000);
     return () => clearInterval(t);
-  }, [syncing, load]);
+  }, [syncing, active, load]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);

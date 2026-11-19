@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { useAppActive } from '@/hooks/useAppActive';
 import { colors, easeOut, radius, spacing, typography } from '@/theme';
 
 type Props = {
@@ -45,8 +46,9 @@ export function SearchBar({
     AccessibilityInfo.isReduceMotionEnabled().then(r => (reduce.current = r));
   }, []);
 
+  const active = useAppActive();
   useEffect(() => {
-    if (value || examples.length < 2) return;
+    if (value || examples.length < 2 || !active) return;
     const t = setInterval(() => {
       if (reduce.current) {
         setIndex(i => (i + 1) % examples.length);
@@ -69,7 +71,7 @@ export function SearchBar({
       });
     }, 2800);
     return () => clearInterval(t);
-  }, [value, examples.length, roll]);
+  }, [value, examples.length, roll, active]);
 
   const example = examples[index % Math.max(examples.length, 1)];
 
@@ -150,7 +152,7 @@ const styles = StyleSheet.create({
   filled: {
     backgroundColor: colors.canvas,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.border,
     boxShadow: '0px 0px 0px rgba(0, 0, 0, 0)',
   },
   field: { flex: 1, height: '100%', justifyContent: 'center' },
