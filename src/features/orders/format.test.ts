@@ -5,9 +5,12 @@ import {
   matchesDate,
   matchesQuery,
   formatDay,
+  arrivalGroup,
+  dayGroup,
   formatMoney,
   orderHeadline,
   trackStep,
+  vendorName,
 } from './format';
 
 describe('formatMoney', () => {
@@ -128,5 +131,72 @@ describe('matchesDate', () => {
       matchesDate(order, { kind: 'day', year: 2026, month: 10, day: 18 }),
     ).toBe(false);
     expect(matchesDate(order, null)).toBe(true);
+  });
+});
+
+describe('vendorName', () => {
+  test('uses the brand spelling where there is one', () => {
+    expect(vendorName('bigbasket')).toBe('BigBasket');
+    expect(vendorName('BIGBASKET')).toBe('BigBasket');
+  });
+
+  test('capitalises everything else', () => {
+    expect(vendorName('amazon')).toBe('Amazon');
+    expect(vendorName('APPLE')).toBe('Apple');
+    expect(vendorName('big-basket-fresh')).toBe('Big Basket Fresh');
+  });
+});
+
+describe('dayGroup', () => {
+  const now = new Date(2026, 10, 19, 12);
+
+  test('names the nearest days and dates the rest', () => {
+    expect(dayGroup(new Date(2026, 10, 19, 9).toISOString(), now).label).toBe(
+      'Today',
+    );
+    expect(dayGroup(new Date(2026, 10, 18, 9).toISOString(), now).label).toBe(
+      'Yesterday',
+    );
+    expect(dayGroup(new Date(2026, 10, 16, 9).toISOString(), now).label).toBe(
+      'Mon, 16 Nov',
+    );
+  });
+
+  test('adds the year only for other years, and keys by day', () => {
+    const old = new Date(2025, 11, 2, 9).toISOString();
+    expect(dayGroup(old, now).label).toBe('Tue, 2 Dec 2025');
+    expect(dayGroup(old, now).key).toBe('2025-12-02');
+    expect(dayGroup(null, now).label).toBe('Date unknown');
+  });
+});
+
+describe('arrivalGroup', () => {
+  const now = new Date(2026, 10, 19, 12);
+  const order = (over: Partial<Order>) =>
+    ({
+      status: 'SHIPPED',
+      expectedDelivery: null,
+      ...over,
+    } as Order);
+
+  test('puts today first, then tomorrow, then later dates, then unknown', () => {
+    const groups = [
+      arrivalGroup(
+        order({ expectedDelivery: new Date(2026, 10, 24).toISOString() }),
+        now,
+      ),
+      arrivalGroup(order({}), now),
+      arrivalGroup(
+        order({ expectedDelivery: new Date(2026, 10, 20).toISOString() }),
+        now,
+      ),
+      arrivalGroup(order({ status: 'OUT_FOR_DELIVERY' }), now),
+    ].sort((a, b) => a.key.localeCompare(b.key));
+    expect(groups.map(g => g.label)).toEqual([
+      'Arriving today',
+      'Arriving tomorrow',
+      'Arriving Tue, 24 Nov',
+      'Arrival date pending',
+    ]);
   });
 });

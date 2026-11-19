@@ -72,6 +72,23 @@ export function formatDay(iso: string, now = new Date()) {
   return `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
+/** Orders grouped by the day they were placed: a stable key and a label. */
+export function dayGroup(iso: string | null, now = new Date()) {
+  if (!iso) return { key: 'undated', label: 'Date unknown' };
+  const d = new Date(iso);
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(d.getDate()).padStart(2, '0')}`;
+  const day = formatDay(iso, now);
+  const relative = /^(Today|Tomorrow|Yesterday)$/.test(day);
+  const label =
+    relative || d.getFullYear() === now.getFullYear()
+      ? day
+      : `${day} ${d.getFullYear()}`;
+  return { key, label };
+}
+
 /** "Today" → "today", but "Thu, 21 Nov" stays as written. */
 const inSentence = (day: string) =>
   /^(Today|Tomorrow|Yesterday)$/.test(day) ? day.toLowerCase() : day;
@@ -113,11 +130,23 @@ export const plural = (n: number, one: string, many = `${one}s`) =>
 export const orderTitle = (order: Order) =>
   order.title ?? order.titles[0] ?? `${vendorName(order.vendor)} order`;
 
-/** "amazon" → "Amazon", "big-basket" → "Big Basket". */
+/** Brands whose own spelling isn't plain capitalisation. */
+const BRAND_NAME: Record<string, string> = {
+  bigbasket: 'BigBasket',
+  jiomart: 'JioMart',
+  dmart: 'DMart',
+  tatacliq: 'Tata CLiQ',
+  firstcry: 'FirstCry',
+  ikea: 'IKEA',
+  boat: 'boAt',
+};
+
+/** "amazon" → "Amazon", "BIGBASKET" → "BigBasket", "big-basket" → "Big Basket". */
 export const vendorName = (vendor: string) =>
+  BRAND_NAME[vendor.toLowerCase().replace(/[^a-z]/g, '')] ??
   vendor
     .split(/[-_\s]+/)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
 
 export const MONTHS_LONG = [
@@ -169,6 +198,30 @@ export const bySoonest = (a: Order, b: Order) => {
       : Number.MAX_SAFE_INTEGER;
   return eta(a) - eta(b);
 };
+
+/**
+ * Which "arriving" bucket an order on its way belongs to. Keys sort
+ * soonest-first as plain strings: today, tomorrow, later dates, unknown.
+ */
+export function arrivalGroup(order: Order, now = new Date()) {
+  if (order.status === 'OUT_FOR_DELIVERY' || !order.expectedDelivery) {
+    return order.status === 'OUT_FOR_DELIVERY'
+      ? { key: '0-today', label: 'Arriving today' }
+      : { key: '9-unknown', label: 'Arrival date pending' };
+  }
+  const d = new Date(order.expectedDelivery);
+  const days = Math.round((startOfDay(d) - startOfDay(now)) / 86400000);
+  if (days <= 0) return { key: '0-today', label: 'Arriving today' };
+  if (days === 1) return { key: '1-tomorrow', label: 'Arriving tomorrow' };
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(d.getDate()).padStart(2, '0')}`;
+  return {
+    key: `2-${stamp}`,
+    label: `Arriving ${formatDay(order.expectedDelivery, now)}`,
+  };
+}
 
 /** "November 2026" — the month an order was placed, for grouping. */
 export const monthKey = (iso: string | null) => {
