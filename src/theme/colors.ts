@@ -22,6 +22,15 @@ export const colors = {
   /** Ember for text on white (4.5:1+); `ember` is for fills. */
   emberText: '#C2410C',
   danger: '#FFD7C9',
+
+  // Product canvas under the ember header (Home and beyond)
+  canvas: '#FAF6F3',
+  hairline: '#EDE3DD',
+  success: '#1F7A4D',
+  successTint: '#E4F3EA',
+  emberTint: '#FDEDE4',
+  /** Warm hairline for order cards. */
+  cardBorder: '#F6DFD1',
 } as const;
 
 /** CSS gradients for the native `backgroundImage` style (RN 0.76+). */
@@ -32,4 +41,6 @@ export const gradients = {
   darkCard: 'linear-gradient(145deg, #3A1A12 0%, #1A0B07 55%, #0E0605 100%)',
   emberStripe: 'linear-gradient(180deg, #FF7A35 0%, #C7340C 100%)',
   chip: 'linear-gradient(135deg, #FFB078 0%, #E8561A 100%)',
+  /** Order cards: white that warms to a faint peach at the bottom-right. */
+  orderCard: 'linear-gradient(160deg, #FFFFFF 0%, #FFFFFF 45%, #FFF1E8 100%)',
 } as const;

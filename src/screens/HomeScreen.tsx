@@ -1,100 +1,88 @@
-import { Inbox, ShieldCheck } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-import { FormHeader, formText } from '@/components/common/FormHeader';
-import { PrimaryButton } from '@/components/common/PrimaryButton';
-import { ScreenShell } from '@/components/common/ScreenShell';
+import { formText } from '@/components/common/FormHeader';
+import { TextLink } from '@/components/common/TextLink';
+import { ConnectGmail } from '@/features/gmail/ConnectGmail';
+import { MainTabs } from '@/navigation/MainTabs';
 import { getGmailConnectUrl } from '@/services/api/auth';
 import { describeError } from '@/services/api/errors';
+import { OrdersProvider, useOrders } from '@/store/orders';
 import { useSession } from '@/store/session';
-import { colors, radius, spacing, typography } from '@/theme';
+import { colors, gradients } from '@/theme';
 
-/**
- * The dashboard's first-use state. Connecting Gmail lives here, not as a
- * gate in sign-in, so the user reaches the app in two steps.
- */
+/** Signed in: either the one remaining ask (Gmail) or the app itself. */
 export function HomeScreen() {
-  const { session } = useSession();
-  const [loading, setLoading] = useState(false);
-  const [opened, setOpened] = useState(false);
-  const [error, setError] = useState<string>();
-
-  const connect = async () => {
-    if (!session) return;
-    setLoading(true);
-    setError(undefined);
-    try {
-      await Linking.openURL(await getGmailConnectUrl(session.accessToken));
-      setOpened(true);
-    } catch (e) {
-      setError(describeError(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <ScreenShell
-      footer={
-        <PrimaryButton
-          label={opened ? 'Open Gmail sign-in again' : 'Connect Gmail'}
-          onPress={connect}
-          loading={loading}
-        />
-      }
-    >
-      <View style={styles.center}>
-        <View style={styles.mark}>
-          <Inbox size={28} color={colors.ink} strokeWidth={2} />
-        </View>
-        <FormHeader title="Your orders will appear here">
-          <Text style={formText.body}>
-            {opened
-              ? 'Finish in your browser. Orders show up here after the first sync.'
-              : 'Connect Gmail and we build the list from the order and shipping emails stores already send you.'}
-          </Text>
-        </FormHeader>
-        <View style={styles.assurance}>
-          <ShieldCheck size={16} color={colors.onEmberMuted} strokeWidth={2} />
-          <Text style={styles.assuranceText}>
-            Read-only. We never send, delete or change email.
-          </Text>
-        </View>
-        {error ? (
-          <Text
-            style={formText.error}
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-          >
-            {error}
-          </Text>
-        ) : null}
-      </View>
-    </ScreenShell>
+    <OrdersProvider>
+      <Gate />
+    </OrdersProvider>
   );
 }
 
+function Gate() {
+  const { authorized } = useSession();
+  const { me, error, load } = useOrders();
+  const [waiting, setWaiting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string>();
+
+  const connect = async () => {
+    setConnecting(true);
+    setConnectError(undefined);
+    try {
+      await Linking.openURL(await authorized(getGmailConnectUrl));
+      setWaiting(true);
+    } catch (e) {
+      setConnectError(describeError(e));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  if (!me) {
+    return (
+      <View style={styles.loading}>
+        {error ? (
+          <>
+            <Text style={formText.error}>{error}</Text>
+            <TextLink label="Try again" onPress={load} />
+          </>
+        ) : (
+          <ActivityIndicator color={colors.onEmber} />
+        )}
+      </View>
+    );
+  }
+
+  if (!me.gmail) {
+    return (
+      <ConnectGmail
+        waiting={waiting}
+        loading={connecting}
+        error={connectError ?? error}
+        onConnect={connect}
+        onCheckAgain={load}
+      />
+    );
+  }
+
+  return <MainTabs />;
+}
+
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center' },
-  mark: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+  loading: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  assurance: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: -spacing.md,
-  },
-  assuranceText: {
-    ...typography.caption,
-    fontSize: 14,
-    color: colors.onEmberMuted,
+    backgroundImage: gradients.ember,
+    gap: 12,
+    padding: 24,
   },
 });
