@@ -62,7 +62,7 @@ function Gate() {
     );
   }
 
-  if (!me.gmail) {
+  if (!me.mailboxes.length) {
     return (
       <ConnectGmail
         waiting={waiting}

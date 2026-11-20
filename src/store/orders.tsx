@@ -10,12 +10,16 @@ import { AppState, Linking } from 'react-native';
 
 import { useAppActive } from '@/hooks/useAppActive';
 
+import { getGmailConnectUrl } from '@/services/api/auth';
 import { describeError } from '@/services/api/errors';
 import {
   getMe,
   getOrders,
   getSummary,
+  removeMailbox,
+  setOrderStatus,
   syncOrders,
+  type ManualStatus,
   type Me,
   type MonthSummary,
   type Order,
@@ -32,6 +36,16 @@ type OrdersContextValue = {
   error?: string;
   load: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Opens Google to connect a mailbox. Resolves to an error message, if any. */
+  connectMailbox: () => Promise<string | undefined>;
+  /** Moves an order forward on its timeline. Resolves to an error message, if any. */
+  changeStatus: (
+    id: string,
+    status: ManualStatus,
+    date?: string,
+  ) => Promise<string | undefined>;
+  /** Removes a mailbox and its orders. Resolves to an error message, if any. */
+  disconnectMailbox: (id: string) => Promise<string | undefined>;
 };
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);
@@ -52,7 +66,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     try {
       const user = await authorized(getMe);
       setMe(user);
-      if (user.gmail) {
+      if (user.mailboxes.length) {
         const [list, month] = await Promise.all([
           authorized(t => getOrders(t, 100)),
           authorized(t => getSummary(t)),
@@ -78,7 +92,10 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     };
   }, [load]);
 
-  const syncing = !!me?.gmail && (me.gmail.isSyncing || !me.gmail.lastSyncedAt);
+  // Still working on a mailbox's first look, ignoring any that need reconnecting.
+  const syncing = !!me?.mailboxes.some(
+    m => !m.needsReconnect && (m.isSyncing || !m.lastSyncedAt),
+  );
   const active = useAppActive();
   // Poll only while syncing and on screen; a backgrounded app stays quiet.
   useEffect(() => {
@@ -98,9 +115,68 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     setRefreshing(false);
   }, [authorized, load]);
 
+  const connectMailbox = useCallback(async () => {
+    try {
+      await Linking.openURL(await authorized(getGmailConnectUrl));
+      return undefined;
+    } catch (e) {
+      return describeError(e);
+    }
+  }, [authorized]);
+
+  const changeStatus = useCallback(
+    async (id: string, status: ManualStatus, date?: string) => {
+      try {
+        await authorized(t => setOrderStatus(t, id, status, date));
+        await load();
+        return undefined;
+      } catch (e) {
+        return describeError(e);
+      }
+    },
+    [authorized, load],
+  );
+
+  const disconnectMailbox = useCallback(
+    async (id: string) => {
+      try {
+        await authorized(t => removeMailbox(t, id));
+        await load();
+        return undefined;
+      } catch (e) {
+        return describeError(e);
+      }
+    },
+    [authorized, load],
+  );
+
   const value = useMemo(
-    () => ({ me, orders, summary, syncing, refreshing, error, load, refresh }),
-    [me, orders, summary, syncing, refreshing, error, load, refresh],
+    () => ({
+      me,
+      orders,
+      summary,
+      syncing,
+      refreshing,
+      error,
+      load,
+      refresh,
+      connectMailbox,
+      disconnectMailbox,
+      changeStatus,
+    }),
+    [
+      me,
+      orders,
+      summary,
+      syncing,
+      refreshing,
+      error,
+      load,
+      refresh,
+      connectMailbox,
+      disconnectMailbox,
+      changeStatus,
+    ],
   );
   return (
     <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>

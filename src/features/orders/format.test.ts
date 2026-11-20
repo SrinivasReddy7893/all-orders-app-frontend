@@ -8,6 +8,7 @@ import {
   arrivalGroup,
   dayGroup,
   formatMoney,
+  orderAlert,
   orderHeadline,
   shareText,
   trackStep,
@@ -180,6 +181,17 @@ describe('arrivalGroup', () => {
       ...over,
     } as Order);
 
+  test('lists a missed expected date as overdue, ahead of today', () => {
+    const groups = [
+      arrivalGroup(order({ status: 'OUT_FOR_DELIVERY' }), now),
+      arrivalGroup(
+        order({ expectedDelivery: new Date(2026, 10, 17).toISOString() }),
+        now,
+      ),
+    ].sort((a, b) => a.key.localeCompare(b.key));
+    expect(groups.map(g => g.label)).toEqual(['Overdue', 'Arriving today']);
+  });
+
   test('puts today first, then tomorrow, then later dates, then unknown', () => {
     const groups = [
       arrivalGroup(
@@ -258,5 +270,78 @@ describe('shareText', () => {
     expect(
       shareText({ ...base, status: 'CANCELLED', isCancelled: true }, now),
     ).toBe('Sony WH-1000XM5 headphones (Amazon)\nCancelled');
+  });
+});
+
+describe('orderAlert', () => {
+  const now = new Date(2026, 10, 19, 15);
+  const day = (n: number) => new Date(2026, 10, n).toISOString();
+  const base = {
+    status: 'SHIPPED',
+    isDelivered: false,
+    isCancelled: false,
+    expectedDelivery: null,
+    lastUpdateAt: day(18),
+  } as Order;
+
+  it('flags an order whose expected date has passed', () => {
+    expect(orderAlert({ ...base, expectedDelivery: day(17) }, now)).toEqual({
+      kind: 'overdue',
+      text: 'Overdue by 2 days',
+    });
+    expect(orderAlert({ ...base, expectedDelivery: day(18) }, now)?.text).toBe(
+      'Overdue by 1 day',
+    );
+  });
+
+  it('stays quiet while the expected date is today or ahead', () => {
+    expect(orderAlert({ ...base, expectedDelivery: day(19) }, now)).toBeNull();
+    expect(
+      orderAlert(
+        { ...base, expectedDelivery: day(25), lastUpdateAt: day(10) },
+        now,
+      ),
+    ).toBeNull();
+  });
+
+  it('flags silence only when there is no date to wait for', () => {
+    expect(orderAlert({ ...base, lastUpdateAt: day(16) }, now)).toBeNull();
+    expect(orderAlert({ ...base, lastUpdateAt: day(15) }, now)).toEqual({
+      kind: 'stalled',
+      text: 'No update for 4 days',
+    });
+  });
+
+  it('flags out for delivery once its date is long past', () => {
+    expect(
+      orderAlert(
+        {
+          ...base,
+          status: 'OUT_FOR_DELIVERY',
+          expectedDelivery: new Date(2026, 4, 10).toISOString(),
+        },
+        now,
+      )?.kind,
+    ).toBe('overdue');
+  });
+
+  it('never flags settled or on-time out-for-delivery orders', () => {
+    const old = { ...base, expectedDelivery: day(10), lastUpdateAt: day(5) };
+    expect(
+      orderAlert(
+        { ...old, status: 'OUT_FOR_DELIVERY', expectedDelivery: day(19) },
+        now,
+      ),
+    ).toBeNull();
+    expect(
+      orderAlert(
+        { ...old, status: 'OUT_FOR_DELIVERY', expectedDelivery: null },
+        now,
+      ),
+    ).toBeNull();
+    expect(
+      orderAlert({ ...old, status: 'DELIVERED', isDelivered: true }, now),
+    ).toBeNull();
+    expect(orderAlert({ ...old, isCancelled: true }, now)).toBeNull();
   });
 });

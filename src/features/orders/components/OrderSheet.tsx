@@ -1,4 +1,11 @@
-import { ChevronDown, ExternalLink, Share2, X } from 'lucide-react-native';
+import {
+  ChevronDown,
+  CircleCheck,
+  CircleX,
+  ExternalLink,
+  Share2,
+  X,
+} from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -17,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Order } from '@/services/api/orders';
 import { usePressScale } from '@/hooks/usePressScale';
+import { useOrders } from '@/store/orders';
 import {
   colors,
   display,
@@ -32,13 +40,16 @@ import {
   dayGroup,
   formatMoney,
   isActive,
+  orderAlert,
   orderTitle,
   shareText,
   vendorName,
 } from '../format';
 import { ArrivalBanner } from './ArrivalBanner';
+import { OrderAlertNote } from './OrderAlert';
 import { OrderIdCard } from './OrderId';
 import { OrderTimeline } from './OrderTimeline';
+import { useOrderActions } from '../useStatusChange';
 import { ShopLogo } from './ShopLogo';
 import { StatusBadge } from './StatusBadge';
 
@@ -53,6 +64,9 @@ type Props = { order: Order | null; onClose: () => void };
  */
 export function OrderSheet({ order, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { me } = useOrders();
+  const actions = useOrderActions();
+  const pressDone = usePressScale(0.97);
   const slide = useRef(new Animated.Value(0)).current;
   const press = usePressScale(0.97);
   const [showAll, setShowAll] = useState(false);
@@ -124,6 +138,7 @@ export function OrderSheet({ order, onClose }: Props) {
   const ended =
     o.isCancelled || o.status === 'RETURNED' || o.status === 'REFUNDED';
   const active = isActive(o);
+  const alert = orderAlert(o);
   const money = formatMoney(o.amount, o.currency);
   const items = o.titles.length > 1 ? o.titles : [orderTitle(o)];
   const shownItems = showAll ? items : items.slice(0, 3);
@@ -134,10 +149,15 @@ export function OrderSheet({ order, onClose }: Props) {
   const facts: [string, string][] = [];
   if (money) facts.push(['Total', money]);
   if (o.deliveredAt) facts.push(['Delivered', dayGroup(o.deliveredAt).label]);
+  else if (o.cancelledAt && o.status === 'CANCELLED')
+    facts.push(['Cancelled', dayGroup(o.cancelledAt).label]);
   else if (o.expectedDelivery && active)
     facts.push(['Expected', dayGroup(o.expectedDelivery).label]);
   if (o.carrier) facts.push(['Carrier', o.carrier.name]);
   if (o.trackingNumber) facts.push(['Tracking', o.trackingNumber]);
+  // Only worth saying which inbox it came from when there is more than one.
+  if ((me?.mailboxes.length ?? 0) > 1 && o.mailboxes?.length)
+    facts.push(['Found in', o.mailboxes.join(', ')]);
 
   return (
     <Modal
@@ -177,7 +197,7 @@ export function OrderSheet({ order, onClose }: Props) {
         <View {...dragHandlers} collapsable={false} style={styles.dragZone}>
           <View style={styles.grabber} />
           <View style={styles.head}>
-            <ShopLogo vendor={o.vendor} size={44} />
+            <ShopLogo vendor={o.vendor} size={44} logoUrl={o.logoUrl} />
             <View style={styles.headText}>
               <Text style={styles.seller} numberOfLines={1}>
                 {vendorName(o.vendor)}
@@ -275,11 +295,28 @@ export function OrderSheet({ order, onClose }: Props) {
             ) : null}
           </View>
 
-          {active ? <ArrivalBanner order={o} /> : null}
+          {alert ? (
+            <OrderAlertNote
+              alert={alert}
+              hint={`Check with ${
+                o.carrier?.name ?? vendorName(o.vendor)
+              } for the latest.`}
+            />
+          ) : null}
+
+          {active && !alert ? <ArrivalBanner order={o} /> : null}
 
           {!ended ? (
             <View style={styles.timeline}>
-              <OrderTimeline status={o.status} />
+              <OrderTimeline
+                status={o.status}
+                onSelect={step => actions.moveTo(o, step)}
+              />
+              {active ? (
+                <Text style={styles.timelineHint}>
+                  Tap a step to update where your order is.
+                </Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -311,6 +348,40 @@ export function OrderSheet({ order, onClose }: Props) {
                   strokeWidth={2.2}
                 />
               </Animated.View>
+            </Pressable>
+          ) : null}
+
+          {active ? (
+            <Pressable
+              onPress={() => actions.moveTo(o, 3)}
+              onPressIn={pressDone.onPressIn}
+              onPressOut={pressDone.onPressOut}
+              accessibilityRole="button"
+              accessibilityLabel="Mark as delivered"
+            >
+              <Animated.View style={[styles.done, pressDone.style]}>
+                <CircleCheck
+                  size={18}
+                  color={colors.textPrimary}
+                  strokeWidth={2.2}
+                />
+                <Text style={styles.doneText}>Mark as delivered</Text>
+              </Animated.View>
+            </Pressable>
+          ) : null}
+
+          {active ? (
+            <Pressable
+              onPress={() => actions.cancel(o)}
+              accessibilityRole="button"
+              accessibilityLabel="Mark as cancelled"
+              style={({ pressed }) => [
+                styles.cancel,
+                pressed && styles.pressed,
+              ]}
+            >
+              <CircleX size={18} color={colors.dangerText} strokeWidth={2.2} />
+              <Text style={styles.cancelText}>Mark as cancelled</Text>
             </Pressable>
           ) : null}
         </ScrollView>
@@ -508,4 +579,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
   },
   trackText: { ...typography.label, color: colors.onInk },
+  timelineHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  done: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    height: 52,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  cancel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    minHeight: 48,
+  },
+  cancelText: { ...typography.label, color: colors.dangerText },
+  doneText: { ...typography.label, color: colors.textPrimary },
 });

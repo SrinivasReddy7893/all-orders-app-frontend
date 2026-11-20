@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, Ellipsis } from 'lucide-react-native';
 import React from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -12,10 +12,13 @@ import {
   dayGroup,
   formatMoney,
   isActive,
+  orderAlert,
   orderTitle,
   vendorName,
 } from '../format';
+import { useOrderActions } from '../useStatusChange';
 import { LiveDot } from './OrderCards';
+import { OrderAlertNote } from './OrderAlert';
 import { ShopLogo } from './ShopLogo';
 import { statusLook } from './StatusBadge';
 
@@ -32,6 +35,7 @@ export function OrderLine({
   onPress: (order: Order) => void;
 }) {
   const press = usePressScale(0.985);
+  const actions = useOrderActions();
   const money = formatMoney(order.amount, order.currency);
   const ended =
     order.isCancelled ||
@@ -39,7 +43,8 @@ export function OrderLine({
     order.status === 'REFUNDED';
   const seller = vendorName(order.vendor);
   const eta = isActive(order) ? arrival(order) : null;
-  const now = eta?.tone === 'now';
+  const alert = orderAlert(order);
+  const now = eta?.tone === 'now' && !alert;
   // Only an order arriving today is solid; the rest wear a soft tint of
   // their status colour, so the one urgent card is the one that shouts.
   const look = statusLook(order.status);
@@ -50,22 +55,25 @@ export function OrderLine({
   const note =
     order.isDelivered && order.deliveredAt
       ? dayGroup(order.deliveredAt).label
+      : order.status === 'CANCELLED' && order.cancelledAt
+      ? dayGroup(order.cancelledAt).label
       : undefined;
 
   return (
     <Pressable
       onPress={() => onPress(order)}
+      onLongPress={() => actions.openMenu(order)}
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
       accessibilityRole="button"
       accessibilityLabel={`${orderTitle(order)}, ${seller}, ${money ?? ''}, ${
         now ? eta?.text : order.status.toLowerCase().replace(/_/g, ' ')
-      }`}
+      }${alert ? `, ${alert.text}` : ''}`}
       accessibilityHint="Opens order details"
     >
       <Animated.View style={[styles.card, press.style]}>
         <View style={styles.top}>
-          <ShopLogo vendor={order.vendor} size={48} />
+          <ShopLogo vendor={order.vendor} size={48} logoUrl={order.logoUrl} />
           <View style={styles.text}>
             <Text style={styles.title} numberOfLines={2}>
               {orderTitle(order)}
@@ -79,6 +87,8 @@ export function OrderLine({
             <Text style={[styles.amount, ended && styles.struck]}>{money}</Text>
           ) : null}
         </View>
+
+        {alert ? <OrderAlertNote alert={alert} strip /> : null}
 
         <View
           style={[
@@ -105,6 +115,20 @@ export function OrderLine({
             <Text style={[styles.note, { color: tone.fg }]} numberOfLines={1}>
               {note}
             </Text>
+          ) : null}
+          {isActive(order) ? (
+            <Pressable
+              onPress={() => actions.openMenu(order)}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 2 }}
+              accessibilityRole="button"
+              accessibilityLabel="Quick actions"
+              style={({ pressed }) => [
+                styles.more,
+                pressed && styles.morePressed,
+              ]}
+            >
+              <Ellipsis size={20} color={tone.fg} strokeWidth={2.4} />
+            </Pressable>
           ) : null}
           <ChevronRight size={18} color={tone.fg} strokeWidth={2.4} />
         </View>
@@ -161,6 +185,14 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   fill: { flex: 1 },
+  more: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  morePressed: { opacity: 0.55 },
   note: {
     ...typography.label,
     fontSize: 13,

@@ -7,7 +7,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { OrderStatus } from '@/services/api/orders';
 import { colors, spacing, typography } from '@/theme';
@@ -28,7 +28,14 @@ const NODE = 30;
  * Done: ink with a check. Now: ember with its own icon and a soft ring.
  * Ahead: hollow, joined by a dashed line, so "what's left" reads at once.
  */
-export function OrderTimeline({ status }: { status: OrderStatus }) {
+export function OrderTimeline({
+  status,
+  onSelect,
+}: {
+  status: OrderStatus;
+  /** Makes the stops still ahead tappable, to say the order has got there. */
+  onSelect?: (step: number) => void;
+}) {
   const step = trackStep(status);
   const nowLabel =
     status === 'OUT_FOR_DELIVERY' ? 'Out for delivery' : STEPS[step].label;
@@ -39,14 +46,31 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
   return (
     <View
       style={styles.row}
-      accessible
+      // A read-only timeline is one spoken line; a tappable one keeps its stops reachable.
+      accessible={!onSelect}
       accessibilityLabel={`Step ${step + 1} of 4: ${nowLabel}`}
     >
       {STEPS.map(({ label, icon: Icon }, i) => {
         const done = i < step;
         const now = i === step;
+        const tappable = !!onSelect && i > step;
         return (
-          <View key={label} style={styles.stop}>
+          <Pressable
+            key={label}
+            style={styles.stop}
+            disabled={!tappable}
+            onPress={() => onSelect?.(i)}
+            hitSlop={{ top: 6, bottom: 6 }}
+            accessibilityRole={tappable ? 'button' : undefined}
+            accessibilityLabel={
+              tappable
+                ? `Mark as ${label.toLowerCase()}`
+                : now
+                ? `Now: ${nowLabel}`
+                : `${label}, done`
+            }
+            accessibilityState={onSelect ? { disabled: !tappable } : undefined}
+          >
             <View style={styles.rail}>
               {i > 0 ? (
                 <View
@@ -71,6 +95,7 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
                   styles.node,
                   done && styles.nodeDone,
                   now && styles.nodeNow,
+                  tappable && styles.nodeTap,
                 ]}
               >
                 {done ? (
@@ -90,7 +115,7 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
             >
               {now ? nowShown : label}
             </Text>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -126,6 +151,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
   },
+  nodeTap: { borderColor: colors.border },
   nodeDone: { backgroundColor: colors.ink, borderColor: colors.ink },
   // The ring is a wide translucent border, so it needs no extra view.
   nodeNow: {

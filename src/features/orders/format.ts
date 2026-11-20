@@ -110,6 +110,8 @@ export function arrival(
   order: Order,
   now = new Date(),
 ): { text: string; tone: ArrivalTone } {
+  const late = orderAlert(order, now);
+  if (late?.kind === 'overdue') return { text: late.text, tone: 'later' };
   if (order.status === 'OUT_FOR_DELIVERY')
     return { text: 'Arriving today', tone: 'now' };
   if (!order.expectedDelivery)
@@ -218,6 +220,36 @@ export const isActive = (o: Order) =>
   o.status !== 'RETURNED' &&
   o.status !== 'REFUNDED';
 
+/** Days without news before an order with no expected date counts as stalled. */
+export const STALLED_AFTER_DAYS = 4;
+
+export type OrderAlert = { kind: 'overdue' | 'stalled'; text: string };
+
+/**
+ * Something worth a second look on an order still on its way. Only facts we
+ * hold: the expected date has passed, or nothing has happened for days and
+ * there is no date to wait for. Out for delivery counts as today unless its
+ * date has long passed.
+ */
+export function orderAlert(order: Order, now = new Date()): OrderAlert | null {
+  if (!isActive(order)) return null;
+  const days = (from: string) =>
+    Math.round((startOfDay(now) - startOfDay(new Date(from))) / 86400000);
+
+  if (order.expectedDelivery) {
+    const late = days(order.expectedDelivery);
+    return late > 0
+      ? { kind: 'overdue', text: `Overdue by ${plural(late, 'day')}` }
+      : null;
+  }
+  // "Out for delivery" with no date is a today-only status, never "stalled".
+  if (order.status === 'OUT_FOR_DELIVERY') return null;
+  const quiet = order.lastUpdateAt ? days(order.lastUpdateAt) : 0;
+  return quiet >= STALLED_AFTER_DAYS
+    ? { kind: 'stalled', text: `No update for ${quiet} days` }
+    : null;
+}
+
 /** Soonest first: out for delivery, then by expected date. */
 export const bySoonest = (a: Order, b: Order) => {
   const eta = (o: Order) =>
@@ -234,6 +266,8 @@ export const bySoonest = (a: Order, b: Order) => {
  * soonest-first as plain strings: today, tomorrow, later dates, unknown.
  */
 export function arrivalGroup(order: Order, now = new Date()) {
+  if (orderAlert(order, now)?.kind === 'overdue')
+    return { key: '0-overdue', label: 'Overdue' };
   if (order.status === 'OUT_FOR_DELIVERY' || !order.expectedDelivery) {
     return order.status === 'OUT_FOR_DELIVERY'
       ? { key: '0-today', label: 'Arriving today' }
@@ -241,7 +275,8 @@ export function arrivalGroup(order: Order, now = new Date()) {
   }
   const d = new Date(order.expectedDelivery);
   const days = Math.round((startOfDay(d) - startOfDay(now)) / 86400000);
-  if (days <= 0) return { key: '0-today', label: 'Arriving today' };
+  if (days < 0) return { key: '0-overdue', label: 'Overdue' };
+  if (days === 0) return { key: '0-today', label: 'Arriving today' };
   if (days === 1) return { key: '1-tomorrow', label: 'Arriving tomorrow' };
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
     2,

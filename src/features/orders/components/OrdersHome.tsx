@@ -195,8 +195,12 @@ export function OrdersHome() {
                   : 'Orders appear here as shops email you. Pull down to check now.'
               }
             >
-              {me?.gmail ? (
-                <Text style={sectionStyles.pill}>{me.gmail.email}</Text>
+              {me?.mailboxes.length ? (
+                <Text style={sectionStyles.pill}>
+                  {me.mailboxes.length === 1
+                    ? me.mailboxes[0].email
+                    : `${me.mailboxes.length} mailboxes`}
+                </Text>
               ) : null}
             </EmptyState>
           ) : (

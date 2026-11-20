@@ -27,7 +27,14 @@ export type Order = {
   trackingUrl: string | null;
   orderedAt: string | null;
   deliveredAt: string | null;
+  cancelledAt?: string | null;
   expectedDelivery: string | null;
+  /** Mailboxes this order was found in. */
+  mailboxes?: string[];
+  /** The shop's own logo, taken from its order emails. */
+  logoUrl?: string | null;
+  /** Latest order email or courier scan; falls back to the order date. */
+  lastUpdateAt?: string | null;
   isDelivered: boolean;
   isInTransit: boolean;
   isCancelled: boolean;
@@ -37,11 +44,19 @@ export type Me = {
   id: string;
   phone: string;
   name: string | null;
-  gmail: {
-    email: string;
-    lastSyncedAt: string | null;
-    isSyncing: boolean;
-  } | null;
+  mailboxes: Mailbox[];
+  maxMailboxes: number;
+};
+
+/** One connected Gmail: who, how fresh, and whether it needs attention. */
+export type Mailbox = {
+  id: string;
+  email: string;
+  lastSyncedAt: string | null;
+  isSyncing: boolean;
+  /** Google took access back; connect it again to keep syncing. */
+  needsReconnect: boolean;
+  orderCount: number;
 };
 
 export type CategorySpend = {
@@ -82,3 +97,34 @@ export const getSummary = async (token: string, month?: string) =>
 
 export const syncOrders = (token: string) =>
   apiRequest<unknown>('/orders/sync', { method: 'POST', token });
+
+/** Removes a mailbox and the orders that were found only in it. */
+export const removeMailbox = async (token: string, id: string) =>
+  (
+    await apiRequest<{ data: { removedOrders: number } }>(
+      `/user/mailboxes/${id}`,
+      { method: 'DELETE', token },
+    )
+  ).data;
+
+/** The steps a buyer can move an order to by hand. */
+export type ManualStatus =
+  | 'PLACED'
+  | 'PROCESSING'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED';
+
+/** The buyer moves an order forward on its timeline (shops often skip emails). */
+export const setOrderStatus = (
+  token: string,
+  id: string,
+  status: ManualStatus,
+  /** The day it was delivered or cancelled, YYYY-MM-DD. Defaults to today. */
+  date?: string,
+) =>
+  apiRequest<unknown>(`/orders/${id}/status`, {
+    method: 'PATCH',
+    token,
+    body: JSON.stringify({ status, date }),
+  });

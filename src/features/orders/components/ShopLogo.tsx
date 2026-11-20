@@ -1,5 +1,5 @@
 import Svg, { Path } from 'react-native-svg';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Image,
   StyleSheet,
@@ -77,14 +77,20 @@ export const brandColor = (vendor: string) => BRAND[key(vendor)] ?? '#5B4335';
 export function ShopLogo({
   vendor,
   size = 44,
+  logoUrl,
 }: {
   vendor: string;
   size?: number;
+  /** The shop's own logo from its emails; used only when we have no bundled mark. */
+  logoUrl?: string | null;
 }) {
+  const [broken, setBroken] = useState(false);
   const color = brandColor(vendor);
   const glyph = GLYPH[key(vendor)];
   const icon = ICON[key(vendor)];
   const filled = FILLED.has(key(vendor));
+  const remote =
+    !icon && !glyph && !filled && logoUrl && !broken ? logoUrl : null;
   return (
     <View
       style={[
@@ -95,7 +101,15 @@ export function ShopLogo({
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {icon ? (
+      {remote ? (
+        <Image
+          source={{ uri: remote }}
+          style={{ width: size * 0.78, height: size * 0.78 }}
+          resizeMode="contain"
+          onError={() => setBroken(true)}
+          accessibilityIgnoresInvertColors
+        />
+      ) : icon ? (
         <Image
           source={icon.source}
           style={{ width: size * icon.scale, height: size * icon.scale }}

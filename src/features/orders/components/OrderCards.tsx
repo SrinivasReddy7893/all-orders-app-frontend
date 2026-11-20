@@ -26,6 +26,7 @@ import { ShopLogo } from './ShopLogo';
 import { OrderId } from './OrderId';
 import { StatusBadge } from './StatusBadge';
 import { OrderTimeline } from './OrderTimeline';
+import { useOrderActions } from '../useStatusChange';
 
 /**
  * An order still on its way, read top to bottom like a delivery app:
@@ -35,12 +36,14 @@ import { OrderTimeline } from './OrderTimeline';
 export function ActiveOrderCard({ order }: { order: Order }) {
   const press = usePressScale(0.98);
   const openOrder = useOpenOrder();
+  const actions = useOrderActions();
   const eta = arrival(order);
   const more = order.titles.length > 1 ? order.titles.length - 1 : 0;
   const money = formatMoney(order.amount, order.currency);
   return (
     <Pressable
       onPress={() => openOrder(order)}
+      onLongPress={() => actions.openMenu(order)}
       unstable_pressDelay={90}
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
@@ -79,7 +82,7 @@ export function ActiveOrderCard({ order }: { order: Order }) {
 
         <View style={styles.body}>
           <View style={styles.head}>
-            <ShopLogo vendor={order.vendor} />
+            <ShopLogo vendor={order.vendor} logoUrl={order.logoUrl} />
             <View style={styles.headText}>
               <Text style={styles.title} numberOfLines={2}>
                 {orderTitle(order)}
@@ -96,7 +99,10 @@ export function ActiveOrderCard({ order }: { order: Order }) {
             </View>
           </View>
 
-          <OrderTimeline status={order.status} />
+          <OrderTimeline
+            status={order.status}
+            onSelect={step => actions.moveTo(order, step)}
+          />
 
           {order.orderId ? (
             <View style={styles.foot}>
@@ -165,7 +171,7 @@ export function OrderRow({ order, last }: { order: Order; last?: boolean }) {
       ]}
     >
       <View style={styles.row}>
-        <ShopLogo vendor={order.vendor} size={40} />
+        <ShopLogo vendor={order.vendor} size={40} logoUrl={order.logoUrl} />
         <View style={styles.rowText}>
           <Text style={styles.rowTitle} numberOfLines={2}>
             {orderTitle(order)}

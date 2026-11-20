@@ -1,22 +1,26 @@
 import {
   ChevronRight,
+  Ellipsis,
   LogOut,
   Mail,
   Phone,
+  Plus,
   RefreshCw,
   ShieldCheck,
+  Trash2,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react-native';
 import React from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import { useDialog } from '@/components/common/Dialog';
 import { EmberScreen } from '@/components/common/EmberScreen';
 import { Logo } from '@/components/common/Logo';
 import {
@@ -24,6 +28,7 @@ import {
   sectionStyles,
 } from '@/features/orders/components/OrderSections';
 import { plural, timeAgo } from '@/features/orders/format';
+import type { Mailbox } from '@/services/api/orders';
 import { useOrders } from '@/store/orders';
 import { useSession } from '@/store/session';
 import { colors, font, gradients, radius, spacing, typography } from '@/theme';
@@ -32,18 +37,68 @@ import { formatPhone } from '@/utils/phone';
 /** Who you are and which inbox we read, then the few things you can do. */
 export function AccountScreen() {
   const { user, signOut } = useSession();
-  const { me, orders, refreshing, refresh } = useOrders();
-  const gmail = me?.gmail;
+  const { me, orders, refreshing, refresh, connectMailbox, disconnectMailbox } =
+    useOrders();
+  const mailboxes = me?.mailboxes ?? [];
+  const max = me?.maxMailboxes ?? 3;
+
+  const dialog = useDialog();
+
+  const fail = (message?: string) => {
+    if (message) dialog.notice('Something went wrong', message);
+  };
+
+  const confirmRemove = (box: Mailbox) =>
+    dialog.confirm({
+      title: `Remove ${box.email}?`,
+      message:
+        "Orders found only in this mailbox are removed from the app. Your Gmail isn't changed.",
+      icon: Trash2,
+      tone: 'danger',
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Remove',
+      onConfirm: async () => fail(await disconnectMailbox(box.id)),
+    });
+
+  const openMailbox = (box: Mailbox) =>
+    dialog.show({
+      layout: 'sheet',
+      title: box.email,
+      message: box.needsReconnect
+        ? 'Access ended. Reconnect to keep syncing.'
+        : plural(box.orderCount, 'order'),
+      actions: [
+        ...(box.needsReconnect
+          ? [
+              {
+                label: 'Reconnect',
+                icon: RefreshCw,
+                tone: 'default' as const,
+                onPress: async () => fail(await connectMailbox()),
+              },
+            ]
+          : []),
+        {
+          label: 'Remove mailbox',
+          icon: Trash2,
+          tone: 'danger' as const,
+          onPress: () => confirmRemove(box),
+        },
+        { label: 'Close' },
+      ],
+    });
 
   const confirmSignOut = () =>
-    Alert.alert(
-      'Sign out of All Orders?',
-      'Your orders stay safe. Sign in with your number to see them again.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign out', style: 'destructive', onPress: signOut },
-      ],
-    );
+    dialog.confirm({
+      title: 'Sign out of All Orders?',
+      message:
+        'Your orders stay safe. Sign in with your number to see them again.',
+      icon: LogOut,
+      tone: 'danger',
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Sign out',
+      onConfirm: signOut,
+    });
 
   return (
     <EmberScreen
@@ -63,30 +118,49 @@ export function AccountScreen() {
       }
     >
       <View style={sectionStyles.section}>
-        <SectionTitle title="Connected" />
+        <SectionTitle title="Mailboxes" count={mailboxes.length} />
         <View style={styles.group}>
-          <Row
-            icon={Phone}
-            label="Phone"
-            value={user ? formatPhone(user.phone) : '—'}
-          />
-          <Row
-            icon={Mail}
-            label="Gmail"
-            value={gmail?.email ?? 'Not connected'}
-            meta={
-              gmail?.lastSyncedAt
-                ? `Checked ${timeAgo(gmail.lastSyncedAt)}`
-                : undefined
-            }
-            last
-          />
+          {mailboxes.map(box => (
+            <MailboxRow
+              key={box.id}
+              box={box}
+              onOpen={() => openMailbox(box)}
+              onReconnect={async () => fail(await connectMailbox())}
+            />
+          ))}
+          {mailboxes.length < max ? (
+            <Action
+              icon={Plus}
+              label="Add another mailbox"
+              meta={`${mailboxes.length} of ${max} connected`}
+              onPress={async () => fail(await connectMailbox())}
+              last
+            />
+          ) : (
+            <View style={styles.limit}>
+              <Text style={styles.meta}>
+                {max} of {max} connected. Remove one to add another.
+              </Text>
+            </View>
+          )}
         </View>
         <View style={styles.assurance}>
           <ShieldCheck size={14} color={colors.success} strokeWidth={2.2} />
           <Text style={styles.assuranceText}>
             Read-only. We never send, delete or change email.
           </Text>
+        </View>
+      </View>
+
+      <View style={sectionStyles.section}>
+        <SectionTitle title="Phone" />
+        <View style={styles.group}>
+          <Row
+            icon={Phone}
+            label="Signed in with"
+            value={user ? formatPhone(user.phone) : '—'}
+            last
+          />
         </View>
       </View>
 
@@ -113,6 +187,74 @@ export function AccountScreen() {
 
       <Text style={styles.footer}>All Orders · version 0.0.1</Text>
     </EmberScreen>
+  );
+}
+
+/**
+ * One connected mailbox. A whole-row tap opens its menu; one that lost access
+ * says so in words and offers Reconnect right on the row.
+ */
+function MailboxRow({
+  box,
+  onOpen,
+  onReconnect,
+}: {
+  box: Mailbox;
+  onOpen: () => void;
+  onReconnect: () => void;
+}) {
+  const stale = box.needsReconnect;
+  const meta = stale
+    ? 'Access ended. Reconnect to keep syncing.'
+    : [
+        plural(box.orderCount, 'order'),
+        box.isSyncing
+          ? 'checking now…'
+          : box.lastSyncedAt
+          ? `checked ${timeAgo(box.lastSyncedAt)}`
+          : 'not checked yet',
+      ].join(' · ');
+  return (
+    <Pressable
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${box.email}, ${meta}`}
+      accessibilityHint="Opens options for this mailbox"
+      style={({ pressed }) => [
+        styles.row,
+        styles.divider,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.icon, stale && styles.iconWarn]}>
+        {stale ? (
+          <TriangleAlert size={18} color={colors.amberText} strokeWidth={2.2} />
+        ) : (
+          <Mail size={18} color={colors.emberText} strokeWidth={2} />
+        )}
+      </View>
+      <View style={styles.body}>
+        <Text style={styles.value} numberOfLines={1} ellipsizeMode="middle">
+          {box.email}
+        </Text>
+        <Text style={[styles.meta, stale && styles.metaWarn]} numberOfLines={2}>
+          {meta}
+        </Text>
+      </View>
+      {stale ? (
+        <Pressable
+          onPress={onReconnect}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={`Reconnect ${box.email}`}
+          style={({ pressed }) => [styles.reconnect, pressed && styles.pressed]}
+        >
+          <Text style={styles.reconnectText}>Reconnect</Text>
+        </Pressable>
+      ) : (
+        <Ellipsis size={20} color={colors.textSecondary} strokeWidth={2.2} />
+      )}
+    </Pressable>
   );
 }
 
@@ -148,6 +290,7 @@ function Row({
 function Action({
   icon: Icon,
   label,
+  meta,
   onPress,
   busy,
   danger,
@@ -155,6 +298,7 @@ function Action({
 }: {
   icon: LucideIcon;
   label: string;
+  meta?: string;
   onPress: () => void;
   busy?: boolean;
   danger?: boolean;
@@ -179,9 +323,16 @@ function Action({
           <Icon size={18} color={colors.emberText} strokeWidth={2} />
         )}
       </View>
-      <Text style={[styles.value, styles.action, { color: tint }]}>
-        {label}
-      </Text>
+      {meta ? (
+        <View style={styles.body}>
+          <Text style={[styles.value, { color: tint }]}>{label}</Text>
+          <Text style={styles.meta}>{meta}</Text>
+        </View>
+      ) : (
+        <Text style={[styles.value, styles.action, { color: tint }]}>
+          {label}
+        </Text>
+      )}
       {!danger ? <ChevronRight size={18} color={colors.textSecondary} /> : null}
     </Pressable>
   );
@@ -229,6 +380,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconDanger: { backgroundColor: colors.dangerTint },
+  iconWarn: { backgroundColor: colors.amberTint },
+  metaWarn: { color: colors.amberText },
+  reconnect: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.amberTint,
+  },
+  reconnectText: { ...font('bold'), fontSize: 13, color: colors.amberText },
+  limit: { paddingVertical: spacing.sm + 2 },
   body: { flex: 1, gap: 1 },
   label: { ...typography.caption, color: colors.textSecondary },
   value: { ...typography.label, color: colors.textPrimary },
