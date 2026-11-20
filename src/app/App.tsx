@@ -4,6 +4,7 @@ import {
   initialWindowMetrics,
 } from 'react-native-safe-area-context';
 
+import { DialogProvider } from '@/components/common/Dialog';
 import { ToastProvider } from '@/components/common/Toast';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { SessionProvider } from '@/store/session';
@@ -13,7 +14,9 @@ function App() {
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <SessionProvider>
         <ToastProvider>
-          <RootNavigator />
+          <DialogProvider>
+            <RootNavigator />
+          </DialogProvider>
         </ToastProvider>
       </SessionProvider>
     </SafeAreaProvider>
