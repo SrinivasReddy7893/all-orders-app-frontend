@@ -9,6 +9,7 @@ import {
   dayGroup,
   formatMoney,
   orderHeadline,
+  shareText,
   trackStep,
   vendorName,
 } from './format';
@@ -198,5 +199,64 @@ describe('arrivalGroup', () => {
       'Arriving Tue, 24 Nov',
       'Arrival date pending',
     ]);
+  });
+});
+
+describe('shareText', () => {
+  const now = new Date(2026, 10, 19, 15);
+  const base = {
+    title: 'Sony WH-1000XM5 headphones',
+    titles: ['Sony WH-1000XM5 headphones'],
+    vendor: 'amazon',
+    status: 'OUT_FOR_DELIVERY',
+    isDelivered: false,
+    isCancelled: false,
+    amount: 26990,
+    orderId: '404-1234567-1234567',
+    carrier: { code: 'delhivery', name: 'Delhivery' },
+    trackingUrl: 'https://track.example/abc',
+    trackingNumber: 'AWB123',
+  } as Order;
+
+  it('says what, when and how to follow it, without price or order ID', () => {
+    const text = shareText(base, now);
+    expect(text).toBe(
+      'Sony WH-1000XM5 headphones (Amazon)\nArriving today via Delhivery\nTrack: https://track.example/abc',
+    );
+    expect(text).not.toMatch(/26|404-/);
+  });
+
+  it('counts extra items and falls back to the tracking number', () => {
+    const text = shareText(
+      {
+        ...base,
+        titles: ['a', 'b', 'c'],
+        trackingUrl: null,
+        status: 'SHIPPED',
+        expectedDelivery: new Date(2026, 10, 20).toISOString(),
+      },
+      now,
+    );
+    expect(text).toContain('+ 2 more (Amazon)');
+    expect(text).toContain('Arrives tomorrow via Delhivery');
+    expect(text).toContain('Tracking no: AWB123');
+  });
+
+  it('drops tracking once delivered or cancelled', () => {
+    const delivered = shareText(
+      {
+        ...base,
+        status: 'DELIVERED',
+        isDelivered: true,
+        deliveredAt: new Date(2026, 10, 18).toISOString(),
+      },
+      now,
+    );
+    expect(delivered).toBe(
+      'Sony WH-1000XM5 headphones (Amazon)\nDelivered yesterday',
+    );
+    expect(
+      shareText({ ...base, status: 'CANCELLED', isCancelled: true }, now),
+    ).toBe('Sony WH-1000XM5 headphones (Amazon)\nCancelled');
   });
 });

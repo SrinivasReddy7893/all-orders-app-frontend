@@ -130,6 +130,36 @@ export const plural = (n: number, one: string, many = `${one}s`) =>
 export const orderTitle = (order: Order) =>
   order.title ?? order.titles[0] ?? `${vendorName(order.vendor)} order`;
 
+/**
+ * A message for family or friends: what is coming, where it stands, and how
+ * to follow it. Leaves out price and order ID, which are the buyer's own.
+ */
+export function shareText(order: Order, now = new Date()) {
+  const first = orderTitle(order);
+  const more = order.titles.length - 1;
+  const what = `${first}${more > 0 ? ` + ${more} more` : ''} (${vendorName(
+    order.vendor,
+  )})`;
+
+  const active = isActive(order);
+  let status: string;
+  if (order.isDelivered)
+    status = order.deliveredAt
+      ? `Delivered ${inSentence(formatDay(order.deliveredAt, now))}`
+      : STATUS_LABEL.DELIVERED;
+  else if (active) status = orderHeadline(order, now);
+  else status = STATUS_LABEL[order.status];
+  if (active && order.carrier) status += ` via ${order.carrier.name}`;
+
+  const lines = [what, status];
+  if (active) {
+    if (order.trackingUrl) lines.push(`Track: ${order.trackingUrl}`);
+    else if (order.trackingNumber)
+      lines.push(`Tracking no: ${order.trackingNumber}`);
+  }
+  return lines.join('\n');
+}
+
 /** Brands whose own spelling isn't plain capitalisation. */
 const BRAND_NAME: Record<string, string> = {
   bigbasket: 'BigBasket',

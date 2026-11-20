@@ -1,10 +1,11 @@
-import { ChevronDown, ExternalLink, X } from 'lucide-react-native';
+import { ChevronDown, ExternalLink, Share2, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   type GestureResponderEvent,
   Linking,
+  Share,
   Modal,
   Pressable,
   ScrollView,
@@ -32,6 +33,7 @@ import {
   formatMoney,
   isActive,
   orderTitle,
+  shareText,
   vendorName,
 } from '../format';
 import { ArrivalBanner } from './ArrivalBanner';
@@ -186,6 +188,17 @@ export function OrderSheet({ order, onClose }: Props) {
                 </Text>
               ) : null}
             </View>
+            <Pressable
+              onPress={() =>
+                Share.share({ message: shareText(o) }).catch(() => undefined)
+              }
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel="Share order status"
+              style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+            >
+              <Share2 size={19} color={colors.textPrimary} strokeWidth={2.2} />
+            </Pressable>
             <Pressable
               onPress={dismiss}
               hitSlop={4}
