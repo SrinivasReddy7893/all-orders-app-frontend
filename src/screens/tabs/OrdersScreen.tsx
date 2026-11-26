@@ -25,7 +25,6 @@ import {
   matchesDate,
   matchesQuery,
   dayGroup,
-  orderTitle,
   type DateFilter,
 } from '@/features/orders/format';
 import { useOpenOrder } from '@/features/orders/OrderSheetContext';
@@ -106,11 +105,6 @@ export function OrdersScreen() {
     ];
   }, [visible, status]);
 
-  const examples = useMemo(
-    () => orders.map(o => o.orderId ?? orderTitle(o)).slice(0, 5),
-    [orders],
-  );
-
   const swap = useSwapIn(`${status}|${date ? dateFilterLabel(date) : ''}`);
 
   return (
@@ -147,12 +141,7 @@ export function OrdersScreen() {
           </Pressable>
         </View>
 
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          examples={examples}
-          variant="filled"
-        />
+        <SearchBar value={query} onChange={setQuery} variant="filled" />
 
         <View style={styles.tabs}>
           <StatusTabs

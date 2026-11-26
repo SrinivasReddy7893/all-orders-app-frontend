@@ -13,11 +13,24 @@ import {
 import { useAppActive } from '@/hooks/useAppActive';
 import { colors, easeOut, radius, spacing, typography } from '@/theme';
 
+/**
+ * Everyday examples that make sense to anyone, one for each thing search
+ * covers: products, shops, order and tracking numbers. Never the user's own
+ * orders, which could show something private to whoever glances at the screen.
+ */
+const EXAMPLES = [
+  'headphones',
+  'Amazon',
+  'shoes',
+  'order ID',
+  'Flipkart',
+  'phone charger',
+  'tracking number',
+];
+
 type Props = {
   value: string;
   onChange: (value: string) => void;
-  /** Real things to search for, cycled in the hint ("Search 'Kindle'"). */
-  examples: string[];
   onFocus?: () => void;
   /**
    * floating: white with a shadow, over the ember header.
@@ -34,7 +47,6 @@ type Props = {
 export function SearchBar({
   value,
   onChange,
-  examples,
   onFocus,
   variant = 'floating',
 }: Props) {
@@ -48,10 +60,10 @@ export function SearchBar({
 
   const active = useAppActive();
   useEffect(() => {
-    if (value || examples.length < 2 || !active) return;
+    if (value || !active) return;
     const t = setInterval(() => {
       if (reduce.current) {
-        setIndex(i => (i + 1) % examples.length);
+        setIndex(i => (i + 1) % EXAMPLES.length);
         return;
       }
       Animated.timing(roll, {
@@ -60,7 +72,7 @@ export function SearchBar({
         easing: easeOut,
         useNativeDriver: true,
       }).start(() => {
-        setIndex(i => (i + 1) % examples.length);
+        setIndex(i => (i + 1) % EXAMPLES.length);
         roll.setValue(-1);
         Animated.timing(roll, {
           toValue: 0,
@@ -71,9 +83,9 @@ export function SearchBar({
       });
     }, 2800);
     return () => clearInterval(t);
-  }, [value, examples.length, roll, active]);
+  }, [value, roll, active]);
 
-  const example = examples[index % Math.max(examples.length, 1)];
+  const example = EXAMPLES[index];
 
   return (
     <View style={[styles.bar, variant === 'filled' && styles.filled]}>
@@ -82,33 +94,29 @@ export function SearchBar({
         {!value ? (
           <View style={styles.hint} pointerEvents="none">
             <Text style={styles.hintText}>Search </Text>
-            {example ? (
-              <Animated.Text
-                numberOfLines={1}
-                style={[
-                  styles.hintText,
-                  styles.example,
-                  {
-                    opacity: roll.interpolate({
-                      inputRange: [-1, 0, 1],
-                      outputRange: [0, 1, 0],
-                    }),
-                    transform: [
-                      {
-                        translateY: roll.interpolate({
-                          inputRange: [-1, 0, 1],
-                          outputRange: [10, 0, -10],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              >
-                “{example}”
-              </Animated.Text>
-            ) : (
-              <Text style={styles.hintText}>orders</Text>
-            )}
+            <Animated.Text
+              numberOfLines={1}
+              style={[
+                styles.hintText,
+                styles.example,
+                {
+                  opacity: roll.interpolate({
+                    inputRange: [-1, 0, 1],
+                    outputRange: [0, 1, 0],
+                  }),
+                  transform: [
+                    {
+                      translateY: roll.interpolate({
+                        inputRange: [-1, 0, 1],
+                        outputRange: [10, 0, -10],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              “{example}”
+            </Animated.Text>
           </View>
         ) : null}
         <TextInput

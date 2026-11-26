@@ -20,7 +20,7 @@ import { useEntrance } from '@/hooks/useEntrance';
 import { useOrders } from '@/store/orders';
 import { colors, display, easeOut, radius, spacing, typography } from '@/theme';
 
-import { bySoonest, isActive, matchesQuery, orderTitle } from '../format';
+import { bySoonest, isActive, matchesQuery } from '../format';
 import type { FilterOption } from './CategoryFilter';
 import { CategoryRail } from './CategoryRail';
 import { ActiveOrderCard } from './OrderCards';
@@ -105,17 +105,6 @@ export function OrdersHome() {
       ...[...counts.values()].sort((a, b) => b.count - a.count),
     ];
   }, [orders]);
-
-  // Hints come from the user's own orders, so they are always findable.
-  const examples = useMemo(
-    () =>
-      [
-        ...new Set(
-          orders.map(o => orderTitle(o).split(' ').slice(0, 2).join(' ')),
-        ),
-      ].slice(0, 6),
-    [orders],
-  );
 
   const choose = (key: string) => {
     if (key === filter) return;
@@ -277,7 +266,6 @@ export function OrdersHome() {
           <SearchBar
             value={query}
             onChange={setQuery}
-            examples={examples}
             variant={overLight ? 'filled' : 'floating'}
           />
         </View>
