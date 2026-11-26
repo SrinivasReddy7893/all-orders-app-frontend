@@ -11,6 +11,7 @@ import {
   orderAlert,
   orderHeadline,
   shareText,
+  spendOrders,
   trackStep,
   vendorName,
 } from './format';
@@ -343,5 +344,35 @@ describe('orderAlert', () => {
       orderAlert({ ...old, status: 'DELIVERED', isDelivered: true }, now),
     ).toBeNull();
     expect(orderAlert({ ...old, isCancelled: true }, now)).toBeNull();
+  });
+});
+
+describe('spendOrders', () => {
+  const order = (id: string, over: Partial<Order>) =>
+    ({ id, status: 'DELIVERED', amount: 100, ...over } as Order);
+
+  it('takes the month in India time, biggest first, unpriced last', () => {
+    const list = [
+      order('small', { orderedAt: '2026-11-10T05:00:00Z', amount: 50 }),
+      // 31 Oct 20:00 UTC is already 1 November in India.
+      order('edge', { orderedAt: '2026-10-31T20:00:00Z', amount: 900 }),
+      order('unpriced', { orderedAt: '2026-11-02T05:00:00Z', amount: null }),
+      order('october', { orderedAt: '2026-10-31T05:00:00Z' }),
+    ];
+    expect(spendOrders(list, '2026-11').map(o => o.id)).toEqual([
+      'edge',
+      'small',
+      'unpriced',
+    ]);
+  });
+
+  it('leaves out cancelled, returned and refunded orders', () => {
+    const list = ['CANCELLED', 'RETURNED', 'REFUNDED'].map(status =>
+      order(status, {
+        status: status as Order['status'],
+        orderedAt: '2026-11-10T05:00:00Z',
+      }),
+    );
+    expect(spendOrders(list, '2026-11')).toEqual([]);
   });
 });

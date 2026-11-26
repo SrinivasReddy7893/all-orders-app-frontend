@@ -1,6 +1,12 @@
 import { ChartPie, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { EmberScreen } from '@/components/common/EmberScreen';
 import { GlassButton } from '@/components/common/GlassButton';
@@ -10,94 +16,126 @@ import {
   SectionTitle,
   sectionStyles,
 } from '@/features/orders/components/OrderSections';
+import { ShopLogo } from '@/features/orders/components/ShopLogo';
 import { SpendBar } from '@/features/orders/components/SpendBar';
-import { SpendTotal } from '@/features/orders/components/SpendBreakdown';
-import { formatMoney, MONTHS_LONG, plural } from '@/features/orders/format';
+import {
+  dayGroup,
+  formatMoney,
+  MONTHS_LONG,
+  orderTitle,
+  plural,
+  spendOrders,
+  vendorName,
+} from '@/features/orders/format';
+import { useOpenOrder } from '@/features/orders/OrderSheetContext';
+import { useCountUp } from '@/hooks/useCountUp';
 import { describeError } from '@/services/api/errors';
-import { getSummary, type MonthSummary } from '@/services/api/orders';
+import {
+  getSummary,
+  type CategorySpend,
+  type MonthSummary,
+  type Order,
+} from '@/services/api/orders';
 import { useOrders } from '@/store/orders';
 import { useSession } from '@/store/session';
-import { colors, gradients, radius, spacing, typography } from '@/theme';
+import { colors, display, font, radius, spacing, typography } from '@/theme';
 
 const key = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`;
 
-/** A month's spend: the total and its shape in ember, categories below. */
+/**
+ * One month's spend, read top to bottom: pick the month, see the total and its
+ * shape, then the categories behind it and the orders behind those. Tapping a
+ * category narrows the orders to it.
+ */
 export function SpendsScreen() {
   const { authorized } = useSession();
-  const { summary: current, refreshing, refresh } = useOrders();
+  const { orders, summary: current, refreshing, refresh } = useOrders();
+  const openOrder = useOpenOrder();
   const now = new Date();
   const [cursor, setCursor] = useState({
     year: now.getFullYear(),
     month: now.getMonth(),
   });
-  const isCurrent =
-    cursor.year === now.getFullYear() && cursor.month === now.getMonth();
+  const month = key(cursor.year, cursor.month);
+  const isCurrent = month === key(now.getFullYear(), now.getMonth());
   const [past, setPast] = useState<MonthSummary>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [picked, setPicked] = useState<string>();
 
   const loadPast = useCallback(async () => {
     setLoading(true);
     setError(undefined);
     try {
-      setPast(
-        await authorized(t => getSummary(t, key(cursor.year, cursor.month))),
-      );
+      setPast(await authorized(t => getSummary(t, month)));
     } catch (e) {
       setError(describeError(e));
     } finally {
       setLoading(false);
     }
-  }, [authorized, cursor]);
+  }, [authorized, month]);
 
   useEffect(() => {
     if (!isCurrent) loadPast();
   }, [isCurrent, loadPast]);
 
-  const summary = isCurrent ? current : loading ? undefined : past;
+  const summary = isCurrent
+    ? current
+    : !loading && past?.month === month
+    ? past
+    : undefined;
   const rows = summary?.categories.filter(c => c.orderCount > 0) ?? [];
   const priced = rows.filter(r => r.spent > 0);
   const total = summary?.totalSpent ?? 0;
+  const filter = rows.find(r => r.category === picked);
+  const bought = spendOrders(orders, month).filter(
+    o => !filter || o.category === filter.category,
+  );
 
-  const step = (delta: number) =>
+  const step = (delta: number) => {
+    setPicked(undefined);
     setCursor(c => {
       const d = new Date(c.year, c.month + delta, 1);
       return { year: d.getFullYear(), month: d.getMonth() };
     });
+  };
 
   return (
     <EmberScreen
       title="Spends"
       refreshing={isCurrent ? refreshing : loading}
       onRefresh={isCurrent ? refresh : loadPast}
-      accessory={
-        <>
-          <GlassButton label="Previous month" onPress={() => step(-1)}>
-            <ChevronLeft size={18} color={colors.onEmber} strokeWidth={2.4} />
-          </GlassButton>
-          <GlassButton
-            label="Next month"
-            onPress={() => step(1)}
-            disabled={isCurrent}
-          >
-            <ChevronRight size={18} color={colors.onEmber} strokeWidth={2.4} />
-          </GlassButton>
-        </>
-      }
       hero={
         <View>
-          <SpendTotal
-            label={`Spent in ${MONTHS_LONG[cursor.month]} ${cursor.year}`}
+          <View style={styles.months}>
+            <GlassButton label="Previous month" onPress={() => step(-1)}>
+              <ChevronLeft size={18} color={colors.onEmber} strokeWidth={2.4} />
+            </GlassButton>
+            <Text style={styles.month} accessibilityLiveRegion="polite">
+              {MONTHS_LONG[cursor.month]} {cursor.year}
+            </Text>
+            <GlassButton
+              label="Next month"
+              onPress={() => step(1)}
+              disabled={isCurrent}
+            >
+              <ChevronRight
+                size={18}
+                color={colors.onEmber}
+                strokeWidth={2.4}
+              />
+            </GlassButton>
+          </View>
+          <Total
             amount={total}
-            pill={
-              summary?.orderCount
-                ? plural(summary.orderCount, 'order')
-                : undefined
-            }
+            label={`Spent in ${MONTHS_LONG[cursor.month]}`}
           />
+          <Text style={styles.count}>
+            {summary ? plural(summary.orderCount, 'order') : ' '}
+          </Text>
           {priced.length ? (
             <SpendBar
-              animateKey={key(cursor.year, cursor.month)}
+              animateKey={month}
               total={total}
               segments={priced.map(r => ({
                 key: r.category,
@@ -106,12 +144,6 @@ export function SpendsScreen() {
               }))}
             />
           ) : null}
-          <Text style={styles.note}>
-            {summary?.unpricedOrders
-              ? `${plural(summary.unpricedOrders, 'order')} without a price · `
-              : ''}
-            Cancellations not counted
-          </Text>
         </View>
       }
     >
@@ -124,57 +156,60 @@ export function SpendsScreen() {
           body={error}
         />
       ) : rows.length ? (
-        <View style={sectionStyles.section}>
-          <SectionTitle title="By category" count={rows.length} />
-          <View style={styles.list}>
-            {rows.map((r, i) => {
-              const share = total > 0 ? r.spent / total : 0;
-              const { icon: Icon, tint, ink } = categoryStyle(r.category);
-              return (
-                <View
+        <>
+          <View style={sectionStyles.section}>
+            <SectionTitle title="Categories" />
+            <View style={styles.group}>
+              {rows.map((r, i) => (
+                <CategoryRow
                   key={r.category}
-                  style={[styles.row, i < rows.length - 1 && styles.divider]}
-                  accessible
-                  accessibilityLabel={`${r.label}, ${formatMoney(
-                    r.spent,
-                  )}, ${Math.round(share * 100)} percent, ${plural(
-                    r.orderCount,
-                    'order',
-                  )}`}
-                >
-                  <View style={[styles.mark, { backgroundColor: tint }]}>
-                    <Icon size={18} color={ink} strokeWidth={2} />
-                  </View>
-                  <View style={styles.rowBody}>
-                    <View style={styles.rowTop}>
-                      <Text style={styles.rowLabel} numberOfLines={1}>
-                        {r.label}
-                      </Text>
-                      <Text style={styles.rowValue}>
-                        {formatMoney(r.spent)}
-                      </Text>
-                    </View>
-                    <View style={styles.shareTrack}>
-                      <View
-                        style={[
-                          styles.shareFill,
-                          {
-                            width: `${Math.max(share * 100, 2)}%`,
-                            backgroundColor: ink,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.rowMeta}>
-                      {plural(r.orderCount, 'order')} ·{' '}
-                      {Math.round(share * 100)}%
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+                  row={r}
+                  share={total > 0 ? r.spent / total : 0}
+                  selected={r.category === picked}
+                  last={i === rows.length - 1}
+                  onPress={() =>
+                    setPicked(p => (p === r.category ? undefined : r.category))
+                  }
+                />
+              ))}
+            </View>
           </View>
-        </View>
+
+          {bought.length ? (
+            <View style={sectionStyles.section}>
+              <View style={styles.ordersHead}>
+                <SectionTitle title={filter ? filter.label : 'Orders'} />
+                {filter ? (
+                  <Pressable
+                    onPress={() => setPicked(undefined)}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    style={({ pressed }) => pressed && styles.pressed}
+                  >
+                    <Text style={styles.showAll}>Show all</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={styles.group}>
+                {bought.map((o, i) => (
+                  <BoughtRow
+                    key={o.id}
+                    order={o}
+                    last={i === bought.length - 1}
+                    onPress={() => openOrder(o)}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          <Text style={styles.note}>
+            Cancelled and returned orders aren’t counted.
+            {summary?.unpricedOrders
+              ? ` ${plural(summary.unpricedOrders, 'order')} had no price.`
+              : ''}
+          </Text>
+        </>
       ) : (
         <EmptyState
           icon={ChartPie}
@@ -190,27 +225,169 @@ export function SpendsScreen() {
   );
 }
 
+/** The month's total, counting up, with any paise set smaller. */
+function Total({ amount, label }: { amount: number; label: string }) {
+  const money = formatMoney(useCountUp(amount)) ?? '₹0';
+  const dot = money.indexOf('.');
+  return (
+    <Text
+      style={styles.total}
+      accessibilityRole="header"
+      accessibilityLabel={`${label}: ${formatMoney(amount) ?? '₹0'}`}
+      adjustsFontSizeToFit
+      numberOfLines={1}
+    >
+      {dot > 0 ? money.slice(0, dot) : money}
+      {dot > 0 ? <Text style={styles.paise}>{money.slice(dot)}</Text> : null}
+    </Text>
+  );
+}
+
+/** The icon tile wears the category's bar colour, so it doubles as the key. */
+function CategoryRow({
+  row,
+  share,
+  selected,
+  last,
+  onPress,
+}: {
+  row: CategorySpend;
+  share: number;
+  selected: boolean;
+  last: boolean;
+  onPress: () => void;
+}) {
+  const { icon: Icon, bar } = categoryStyle(row.category);
+  const money = formatMoney(row.spent) ?? '₹0';
+  // Under one percent reads as "<1%", never "0%".
+  const percent =
+    row.spent > 0 && share < 0.01 ? '<1%' : `${Math.round(share * 100)}%`;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${row.label}, ${money}, ${percent}, ${plural(
+        row.orderCount,
+        'order',
+      )}`}
+      accessibilityHint="Shows only these orders"
+      style={({ pressed }) => [
+        styles.row,
+        !last && styles.divider,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.mark, { backgroundColor: bar }]}>
+        <Icon size={18} color={colors.ink} strokeWidth={2.2} />
+      </View>
+      <View style={styles.body}>
+        <Text
+          style={[styles.name, selected && styles.nameOn]}
+          numberOfLines={1}
+        >
+          {row.label}
+        </Text>
+        <Text style={[styles.meta, selected && styles.nameOn]}>
+          {selected ? 'Showing below' : plural(row.orderCount, 'order')}
+        </Text>
+      </View>
+      <View style={styles.end}>
+        <Text style={styles.amount}>{money}</Text>
+        <Text style={styles.meta}>{percent}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function BoughtRow({
+  order,
+  last,
+  onPress,
+}: {
+  order: Order;
+  last: boolean;
+  onPress: () => void;
+}) {
+  const money = formatMoney(order.amount, order.currency);
+  const when = order.orderedAt ? dayGroup(order.orderedAt).label : '';
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${orderTitle(order)}, ${vendorName(
+        order.vendor,
+      )}, ${when}, ${money ?? 'no price'}`}
+      accessibilityHint="Opens order details"
+      style={({ pressed }) => [
+        styles.row,
+        !last && styles.divider,
+        pressed && styles.pressed,
+      ]}
+    >
+      <ShopLogo vendor={order.vendor} size={40} logoUrl={order.logoUrl} />
+      <View style={styles.body}>
+        <Text style={styles.name} numberOfLines={1}>
+          {orderTitle(order)}
+        </Text>
+        <Text style={styles.meta} numberOfLines={1}>
+          {vendorName(order.vendor)} · {when}
+        </Text>
+      </View>
+      <Text style={money ? styles.amount : styles.meta}>
+        {money ?? 'No price'}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  note: {
-    ...typography.caption,
+  months: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  month: { ...typography.label, color: colors.onEmber },
+  total: {
+    ...display,
+    fontSize: 44,
+    lineHeight: 56,
+    letterSpacing: -1,
+    textAlign: 'center',
+    color: colors.onEmber,
+    marginTop: spacing.md,
+    fontVariant: ['tabular-nums'],
+  },
+  paise: {
+    ...font('medium'),
+    fontSize: 24,
     color: colors.onEmberSubtle,
-    marginTop: spacing.sm,
+  },
+  count: {
+    ...typography.caption,
+    textAlign: 'center',
+    color: colors.onEmberSubtle,
   },
   loader: { marginTop: spacing.xl },
-  list: {
+  group: {
     backgroundColor: colors.surface,
-    backgroundImage: gradients.orderCard,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    boxShadow: '0px 8px 20px rgba(226, 80, 26, 0.06)',
   },
-  row: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.md },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 64,
+    paddingVertical: spacing.sm,
+  },
   divider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.cardBorder,
   },
+  pressed: { opacity: 0.6 },
   mark: {
     width: 40,
     height: 40,
@@ -218,24 +395,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowBody: { flex: 1, gap: 6 },
-  rowTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  rowLabel: { ...typography.label, color: colors.textPrimary, flexShrink: 1 },
-  rowValue: {
+  body: { flex: 1, gap: 1 },
+  end: { alignItems: 'flex-end', gap: 1 },
+  name: { ...typography.label, color: colors.textPrimary },
+  nameOn: { color: colors.emberText },
+  meta: { ...typography.caption, color: colors.textSecondary },
+  amount: {
     ...typography.label,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
   },
-  shareTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.track,
-    overflow: 'hidden',
+  ordersHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: spacing.xxs,
   },
-  shareFill: { height: '100%', borderRadius: 3 },
-  rowMeta: { ...typography.caption, color: colors.textSecondary },
+  showAll: { ...typography.label, color: colors.emberText },
+  note: {
+    ...typography.caption,
+    textAlign: 'center',
+    color: colors.textSecondary,
+  },
 });

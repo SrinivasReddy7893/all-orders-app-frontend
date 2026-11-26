@@ -69,6 +69,9 @@ const ICON: Record<string, { source: ImageSourcePropType; scale: number }> = {
  */
 const FILLED = new Set(['nykaa']);
 
+/** Shops whose emailed logo is white artwork, made for a dark background. */
+const LIGHT_ART = new Set(['ajio']);
+
 const key = (vendor: string) => vendor.toLowerCase().replace(/[^a-z]/g, '');
 
 export const brandColor = (vendor: string) => BRAND[key(vendor)] ?? '#5B4335';
@@ -91,12 +94,14 @@ export function ShopLogo({
   const filled = FILLED.has(key(vendor));
   const remote =
     !icon && !glyph && !filled && logoUrl && !broken ? logoUrl : null;
+  // White artwork needs the brand colour behind it, or it disappears.
+  const onBrand = filled || (!!remote && LIGHT_ART.has(key(vendor)));
   return (
     <View
       style={[
         styles.tile,
         { width: size, height: size, borderRadius: size * 0.3 },
-        filled && { backgroundColor: color, borderColor: color },
+        onBrand && { backgroundColor: color, borderColor: color },
       ]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
@@ -124,7 +129,7 @@ export function ShopLogo({
         <Text
           style={[
             styles.initial,
-            { color: filled ? colors.surface : color, fontSize: size * 0.46 },
+            { color: onBrand ? colors.surface : color, fontSize: size * 0.46 },
           ]}
         >
           {vendor.charAt(0).toUpperCase()}

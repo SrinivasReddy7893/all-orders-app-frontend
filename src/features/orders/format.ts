@@ -325,3 +325,22 @@ export function dateFilterLabel(f: DateFilter) {
   const d = new Date(f.year, f.month, f.day);
   return `${DAYS[d.getDay()]}, ${f.day} ${MONTHS[f.month]}`;
 }
+
+/**
+ * The orders behind a month's spend ("2026-11"), biggest first. Mirrors the
+ * server's rule: months are India time, and cancelled, returned or refunded
+ * orders are not spending.
+ */
+export function spendOrders(orders: Order[], month: string) {
+  const IST = 5.5 * 60 * 60 * 1000;
+  return orders
+    .filter(
+      o =>
+        o.orderedAt &&
+        new Date(Date.parse(o.orderedAt) + IST)
+          .toISOString()
+          .startsWith(month) &&
+        !['CANCELLED', 'RETURNED', 'REFUNDED'].includes(o.status),
+    )
+    .sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1));
+}
