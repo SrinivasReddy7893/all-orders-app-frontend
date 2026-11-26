@@ -3,6 +3,7 @@ import {
   Headphones,
   House,
   Package,
+  Pill,
   Shirt,
   ShoppingBasket,
   Sparkles,
@@ -47,6 +48,7 @@ const STYLES: Record<string, CategoryStyle> = {
     ink: '#9C2F4C',
   },
   FRAGRANCE: { icon: Flower2, bar: '#E9C8A0', tint: '#F6EEE4', ink: '#6E4B26' },
+  HEALTH: { icon: Pill, bar: '#8FD0C8', tint: '#E4F3F1', ink: '#1F5F58' },
   OTHER: { icon: Package, bar: '#B9A69B', tint: '#F1ECE8', ink: '#5B4335' },
 };
 
