@@ -21,6 +21,16 @@ export const STEP_STATUS: ManualStatus[] = [
 ];
 export const STEP_NAME = ['Placed', 'Packed', 'Shipped', 'Delivered'];
 
+/** One-tap dates the order itself already knows. */
+const dateShortcuts = (order: Order) => [
+  ...(order.expectedDelivery
+    ? [{ label: 'Expected', date: new Date(order.expectedDelivery) }]
+    : []),
+  ...(order.orderedAt
+    ? [{ label: 'Order day', date: new Date(order.orderedAt) }]
+    : []),
+];
+
 /**
  * Saying where an order really is. Shops often skip emails, so the buyer can
  * move an order forward on its timeline, or mark it delivered or cancelled.
@@ -46,6 +56,7 @@ export function useOrderActions() {
         message: 'This can’t be undone.',
         confirmLabel: 'Mark delivered',
         min: order.orderedAt ? new Date(order.orderedAt) : undefined,
+        shortcuts: dateShortcuts(order),
         onPick: day => apply(order, 'DELIVERED', day),
       });
       return;
@@ -68,6 +79,7 @@ export function useOrderActions() {
       confirmLabel: 'Mark cancelled',
       tone: 'danger',
       min: order.orderedAt ? new Date(order.orderedAt) : undefined,
+      shortcuts: dateShortcuts(order).filter(x => x.label === 'Order day'),
       onPick: day => apply(order, 'CANCELLED', day),
     });
 
