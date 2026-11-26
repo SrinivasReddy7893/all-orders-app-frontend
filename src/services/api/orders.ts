@@ -128,3 +128,7 @@ export const setOrderStatus = (
     token,
     body: JSON.stringify({ status, date }),
   });
+
+/** Permanently deletes the account and everything saved for it. */
+export const deleteAccount = (token: string) =>
+  apiRequest<unknown>('/user', { method: 'DELETE', token });

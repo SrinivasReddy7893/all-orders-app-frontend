@@ -13,6 +13,7 @@ import { useAppActive } from '@/hooks/useAppActive';
 import { getGmailConnectUrl } from '@/services/api/auth';
 import { describeError } from '@/services/api/errors';
 import {
+  deleteAccount,
   getMe,
   getOrders,
   getSummary,
@@ -38,6 +39,8 @@ type OrdersContextValue = {
   refresh: () => Promise<void>;
   /** Opens Google to connect a mailbox. Resolves to an error message, if any. */
   connectMailbox: () => Promise<string | undefined>;
+  /** Deletes the account, then signs out. Resolves to an error message, if any. */
+  removeAccount: () => Promise<string | undefined>;
   /** Moves an order forward on its timeline. Resolves to an error message, if any. */
   changeStatus: (
     id: string,
@@ -55,7 +58,7 @@ const OrdersContext = createContext<OrdersContextValue | null>(null);
  * from Google (allorders://), re-checks so nobody refreshes by hand.
  */
 export function OrdersProvider({ children }: { children: React.ReactNode }) {
-  const { authorized } = useSession();
+  const { authorized, signOut } = useSession();
   const [me, setMe] = useState<Me>();
   const [orders, setOrders] = useState<Order[]>([]);
   const [summary, setSummary] = useState<MonthSummary>();
@@ -137,6 +140,16 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     [authorized, load],
   );
 
+  const removeAccount = useCallback(async () => {
+    try {
+      await authorized(deleteAccount);
+    } catch (e) {
+      return describeError(e);
+    }
+    await signOut();
+    return undefined;
+  }, [authorized, signOut]);
+
   const disconnectMailbox = useCallback(
     async (id: string) => {
       try {
@@ -163,6 +176,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
       connectMailbox,
       disconnectMailbox,
       changeStatus,
+      removeAccount,
     }),
     [
       me,
@@ -176,6 +190,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
       connectMailbox,
       disconnectMailbox,
       changeStatus,
+      removeAccount,
     ],
   );
   return (

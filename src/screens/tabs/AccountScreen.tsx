@@ -1,9 +1,9 @@
 import {
-  ChevronRight,
+  ArrowUpRight,
   Ellipsis,
+  FileText,
   LogOut,
   Mail,
-  Phone,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -14,6 +14,7 @@ import {
 import React from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -23,6 +24,7 @@ import {
 import { useDialog } from '@/components/common/Dialog';
 import { EmberScreen } from '@/components/common/EmberScreen';
 import { Logo } from '@/components/common/Logo';
+import { config } from '@/config/env';
 import {
   SectionTitle,
   sectionStyles,
@@ -37,8 +39,15 @@ import { formatPhone } from '@/utils/phone';
 /** Who you are and which inbox we read, then the few things you can do. */
 export function AccountScreen() {
   const { user, signOut } = useSession();
-  const { me, orders, refreshing, refresh, connectMailbox, disconnectMailbox } =
-    useOrders();
+  const {
+    me,
+    orders,
+    refreshing,
+    refresh,
+    connectMailbox,
+    disconnectMailbox,
+    removeAccount,
+  } = useOrders();
   const mailboxes = me?.mailboxes ?? [];
   const max = me?.maxMailboxes ?? 3;
 
@@ -88,17 +97,43 @@ export function AccountScreen() {
       ],
     });
 
+  // Deleting can't be undone, so it asks twice.
+  const confirmDelete = () =>
+    dialog.confirm({
+      title: 'Delete your account?',
+      message:
+        'This removes your orders, connected mailboxes and phone sign-in. Your emails stay in Gmail.',
+      icon: Trash2,
+      tone: 'danger',
+      cancelLabel: 'Keep account',
+      confirmLabel: 'Continue',
+      onConfirm: () =>
+        dialog.confirm({
+          title: 'Delete everything?',
+          message: 'This is permanent. It can’t be undone.',
+          icon: Trash2,
+          tone: 'danger',
+          cancelLabel: 'Cancel',
+          confirmLabel: 'Delete account',
+          onConfirm: async () => fail(await removeAccount()),
+        }),
+    });
+
+  const open = (url: string) =>
+    Linking.openURL(url).catch(() => fail('Couldn’t open the page.'));
+
   const confirmSignOut = () =>
     dialog.confirm({
       title: 'Sign out of All Orders?',
       message:
         'Your orders stay safe. Sign in with your number to see them again.',
       icon: LogOut,
-      tone: 'danger',
       cancelLabel: 'Cancel',
       confirmLabel: 'Sign out',
       onConfirm: signOut,
     });
+
+  const addMailbox = async () => fail(await connectMailbox());
 
   return (
     <EmberScreen
@@ -111,31 +146,39 @@ export function AccountScreen() {
               {user ? formatPhone(user.phone) : '—'}
             </Text>
             <Text style={styles.heroMeta}>
-              {plural(orders.length, 'order')} tracked
+              {plural(orders.length, 'order')} from{' '}
+              {plural(mailboxes.length, 'mailbox', 'mailboxes')}
             </Text>
           </View>
         </View>
       }
     >
+      {/* The one thing this screen manages: where orders come from. */}
       <View style={sectionStyles.section}>
-        <SectionTitle title="Mailboxes" count={mailboxes.length} />
+        <SectionTitle title="Mailboxes" />
         <View style={styles.group}>
           {mailboxes.map(box => (
             <MailboxRow
               key={box.id}
               box={box}
               onOpen={() => openMailbox(box)}
-              onReconnect={async () => fail(await connectMailbox())}
+              onReconnect={addMailbox}
             />
           ))}
           {mailboxes.length < max ? (
-            <Action
-              icon={Plus}
-              label="Add another mailbox"
-              meta={`${mailboxes.length} of ${max} connected`}
-              onPress={async () => fail(await connectMailbox())}
-              last
-            />
+            <Pressable
+              onPress={addMailbox}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            >
+              <View style={styles.addIcon}>
+                <Plus size={18} color={colors.emberText} strokeWidth={2.4} />
+              </View>
+              <Text style={styles.addText}>Add a mailbox</Text>
+              <Text style={styles.meta}>
+                {mailboxes.length} of {max}
+              </Text>
+            </Pressable>
           ) : (
             <View style={styles.limit}>
               <Text style={styles.meta}>
@@ -144,48 +187,60 @@ export function AccountScreen() {
             </View>
           )}
         </View>
+        <Pressable
+          onPress={refresh}
+          disabled={refreshing}
+          accessibilityRole="button"
+          accessibilityState={{ busy: refreshing }}
+          style={({ pressed }) => [styles.sync, pressed && styles.syncPressed]}
+        >
+          {refreshing ? (
+            <ActivityIndicator size="small" color={colors.onInk} />
+          ) : (
+            <RefreshCw size={18} color={colors.onInk} strokeWidth={2.2} />
+          )}
+          <Text style={styles.syncText}>
+            {refreshing ? 'Checking your mail…' : 'Check for new orders'}
+          </Text>
+        </Pressable>
         <View style={styles.assurance}>
           <ShieldCheck size={14} color={colors.success} strokeWidth={2.2} />
-          <Text style={styles.assuranceText}>
+          <Text style={styles.meta}>
             Read-only. We never send, delete or change email.
           </Text>
         </View>
       </View>
 
       <View style={sectionStyles.section}>
-        <SectionTitle title="Phone" />
+        <SectionTitle title="About" />
         <View style={styles.group}>
-          <Row
-            icon={Phone}
-            label="Signed in with"
-            value={user ? formatPhone(user.phone) : '—'}
-            last
+          <Line
+            icon={ShieldCheck}
+            label="Privacy Policy"
+            external
+            onPress={() => open(config.legalUrls.privacy)}
           />
+          <Line
+            icon={FileText}
+            label="Terms of Use"
+            external
+            onPress={() => open(config.legalUrls.terms)}
+          />
+          <Line icon={LogOut} label="Sign out" onPress={confirmSignOut} last />
         </View>
       </View>
 
-      <View style={sectionStyles.section}>
-        <SectionTitle title="Settings" />
-        <View style={styles.group}>
-          <Action
-            icon={RefreshCw}
-            label={
-              refreshing ? 'Checking for new orders…' : 'Check for new orders'
-            }
-            busy={refreshing}
-            onPress={refresh}
-          />
-          <Action
-            icon={LogOut}
-            label="Sign out"
-            onPress={confirmSignOut}
-            danger
-            last
-          />
-        </View>
+      {/* Permanent, so it sits apart and stays quiet until asked for. */}
+      <View style={styles.end}>
+        <Pressable
+          onPress={confirmDelete}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
+        >
+          <Text style={styles.deleteText}>Delete account</Text>
+        </Pressable>
+        <Text style={styles.meta}>All Orders · version 0.0.1</Text>
       </View>
-
-      <Text style={styles.footer}>All Orders · version 0.0.1</Text>
     </EmberScreen>
   );
 }
@@ -258,82 +313,36 @@ function MailboxRow({
   );
 }
 
-function Row({
+/** A plain row: icon, words, and an arrow when it leaves the app. */
+function Line({
   icon: Icon,
   label,
-  value,
-  meta,
-  last,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  meta?: string;
-  last?: boolean;
-}) {
-  return (
-    <View style={[styles.row, !last && styles.divider]}>
-      <View style={styles.icon}>
-        <Icon size={18} color={colors.emberText} strokeWidth={2} />
-      </View>
-      <View style={styles.body}>
-        <Text style={styles.label}>{label}</Text>
-        <Text style={styles.value} numberOfLines={1} ellipsizeMode="middle">
-          {value}
-        </Text>
-        {meta ? <Text style={styles.meta}>{meta}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
-function Action({
-  icon: Icon,
-  label,
-  meta,
   onPress,
-  busy,
-  danger,
+  external,
   last,
 }: {
   icon: LucideIcon;
   label: string;
-  meta?: string;
   onPress: () => void;
-  busy?: boolean;
-  danger?: boolean;
+  external?: boolean;
   last?: boolean;
 }) {
-  const tint = danger ? colors.emberText : colors.textPrimary;
   return (
     <Pressable
       onPress={onPress}
-      disabled={busy}
-      accessibilityRole="button"
+      accessibilityRole={external ? 'link' : 'button'}
+      accessibilityHint={external ? 'Opens in your browser' : undefined}
       style={({ pressed }) => [
-        styles.row,
+        styles.line,
         !last && styles.divider,
         pressed && styles.pressed,
       ]}
     >
-      <View style={[styles.icon, danger && styles.iconDanger]}>
-        {busy ? (
-          <ActivityIndicator size="small" color={tint} />
-        ) : (
-          <Icon size={18} color={colors.emberText} strokeWidth={2} />
-        )}
-      </View>
-      {meta ? (
-        <View style={styles.body}>
-          <Text style={[styles.value, { color: tint }]}>{label}</Text>
-          <Text style={styles.meta}>{meta}</Text>
-        </View>
-      ) : (
-        <Text style={[styles.value, styles.action, { color: tint }]}>
-          {label}
-        </Text>
-      )}
-      {!danger ? <ChevronRight size={18} color={colors.textSecondary} /> : null}
+      <Icon size={20} color={colors.textSecondary} strokeWidth={2} />
+      <Text style={styles.lineText}>{label}</Text>
+      {external ? (
+        <ArrowUpRight size={18} color={colors.textSecondary} strokeWidth={2} />
+      ) : null}
     </Pressable>
   );
 }
@@ -379,7 +388,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconDanger: { backgroundColor: colors.dangerTint },
   iconWarn: { backgroundColor: colors.amberTint },
   metaWarn: { color: colors.amberText },
   reconnect: {
@@ -392,20 +400,49 @@ const styles = StyleSheet.create({
   reconnectText: { ...font('bold'), fontSize: 13, color: colors.amberText },
   limit: { paddingVertical: spacing.sm + 2 },
   body: { flex: 1, gap: 1 },
-  label: { ...typography.caption, color: colors.textSecondary },
   value: { ...typography.label, color: colors.textPrimary },
-  action: { flex: 1 },
   meta: { ...typography.caption, color: colors.textSecondary },
+  // Dashed, so "add" reads as an empty slot rather than another mailbox.
+  addIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addText: { ...typography.label, flex: 1, color: colors.emberText },
+  sync: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    minHeight: 52,
+    borderRadius: radius.pill,
+    backgroundColor: colors.ink,
+  },
+  syncPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  syncText: { ...typography.label, color: colors.onInk },
   assurance: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: spacing.xxs,
   },
-  assuranceText: { ...typography.caption, color: colors.textSecondary },
-  footer: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    textAlign: 'center',
+  line: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 56,
   },
+  lineText: { ...typography.label, flex: 1, color: colors.textPrimary },
+  end: { alignItems: 'center', gap: spacing.xxs },
+  delete: {
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+  },
+  deleteText: { ...typography.label, color: colors.dangerText },
 });

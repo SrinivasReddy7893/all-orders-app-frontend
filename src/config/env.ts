@@ -9,11 +9,13 @@ const DEV_API_URL = Platform.select({
   default: 'http://localhost:4000',
 });
 
+const API_ORIGIN = __DEV__ ? DEV_API_URL : 'https://api.example.com'; // TODO: production URL
+
 export const config = {
-  apiBaseUrl: `${__DEV__ ? DEV_API_URL : 'https://api.example.com'}/api/v1`, // TODO: production URL
-  /** TODO: replace with the published policy pages before release. */
+  apiBaseUrl: `${API_ORIGIN}/api/v1`,
+  /** Public pages served by the backend. */
   legalUrls: {
-    terms: 'https://example.com/terms',
-    privacy: 'https://example.com/privacy',
+    terms: `${API_ORIGIN}/legal/terms`,
+    privacy: `${API_ORIGIN}/legal/privacy`,
   },
 } as const;
